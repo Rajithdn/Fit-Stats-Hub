@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 import { db } from "@workspace/db";
 import { users, userProfiles } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
-import { JWT_SECRET } from "../middlewares/auth.js";
+import { JWT_SECRET, requireAuth, AuthRequest } from "../middlewares/auth.js";
 
 const router = Router();
 
@@ -51,6 +51,31 @@ router.post("/login", async (req, res) => {
     res.json({ token, username: user.username, userId: user.id });
   } catch {
     res.status(500).json({ error: "Login failed" });
+  }
+});
+
+router.post("/change-password", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body as { currentPassword: string; newPassword: string };
+    if (!currentPassword || !newPassword || newPassword.length < 4) {
+      res.status(400).json({ error: "Current password and new password (min 4 chars) required" });
+      return;
+    }
+    const [user] = await db.select().from(users).where(eq(users.id, req.userId!)).limit(1);
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!valid) {
+      res.status(401).json({ error: "Current password is incorrect" });
+      return;
+    }
+    const newHash = await bcrypt.hash(newPassword, 10);
+    await db.update(users).set({ passwordHash: newHash }).where(eq(users.id, req.userId!));
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to change password" });
   }
 });
 

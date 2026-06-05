@@ -8,22 +8,29 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { UserProfile } from "@/store/useStore";
-import { User, Target, Settings2, Camera, Trash2, HardDrive, RefreshCw } from "lucide-react";
+import { User, Target, Settings2, Camera, Trash2, ShieldCheck, Eye, EyeOff, Loader2, Database, RefreshCw, CheckCircle2 } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 
 export function Settings() {
-  const { userProfile, profilePhoto, theme, setTheme, updateProfile, setProfilePhoto } = useStore();
+  const { userProfile, profilePhoto, theme, username, setTheme, updateProfile, setProfilePhoto } = useStore();
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState<UserProfile>({ ...userProfile });
 
+  // Change password state
+  const [currentPw, setCurrentPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [pwLoading, setPwLoading] = useState(false);
+  const [pwError, setPwError] = useState("");
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     updateProfile(formData);
-    toast({
-      title: "Profile Saved",
-      description: "Your settings have been updated successfully.",
-    });
+    toast({ title: "Profile Saved", description: "Your settings have been updated successfully." });
   };
 
   const set = <K extends keyof UserProfile>(key: K, value: UserProfile[K]) =>
@@ -49,20 +56,34 @@ export function Settings() {
     toast({ title: "Photo removed" });
   }
 
+  async function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setPwError("");
+    if (!currentPw) { setPwError("Enter your current password"); return; }
+    if (newPw.length < 4) { setPwError("New password must be at least 4 characters"); return; }
+    if (newPw !== confirmPw) { setPwError("New passwords don't match"); return; }
+    if (currentPw === newPw) { setPwError("New password must be different from current"); return; }
+    setPwLoading(true);
+    try {
+      await apiFetch("/api/auth/change-password", {
+        method: "POST",
+        body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw }),
+      });
+      setCurrentPw(""); setNewPw(""); setConfirmPw(""); setPwError("");
+      toast({ title: "Password changed!", description: "Your password has been updated successfully." });
+    } catch (err: any) {
+      setPwError(err.message || "Failed to change password");
+    } finally {
+      setPwLoading(false);
+    }
+  }
+
   const initials = userProfile.name
     .split(" ")
     .map((w) => w[0])
     .join("")
     .toUpperCase()
     .slice(0, 2);
-
-  const storageKey = 'fitness-dashboard-storage';
-  const storageSize = (() => {
-    try {
-      const raw = localStorage.getItem(storageKey) ?? '';
-      return (new Blob([raw]).size / 1024).toFixed(1);
-    } catch { return '0'; }
-  })();
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -76,7 +97,6 @@ export function Settings() {
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-6">
-            {/* Avatar */}
             <div className="relative shrink-0">
               <div className="w-24 h-24 rounded-full border-2 border-border overflow-hidden bg-primary/10 flex items-center justify-center">
                 {profilePhoto ? (
@@ -92,10 +112,11 @@ export function Settings() {
                 <Camera className="w-3.5 h-3.5" />
               </button>
             </div>
-
             <div className="space-y-2">
               <p className="font-medium">{userProfile.name || "Your Name"}</p>
-              <p className="text-sm text-muted-foreground">{userProfile.goal} · {userProfile.activityLevel}</p>
+              <p className="text-sm text-muted-foreground">
+                {username ? `@${username}` : ""}{userProfile.goal ? ` · ${userProfile.goal}` : ""}
+              </p>
               <div className="flex gap-2 pt-1">
                 <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
                   <Camera className="w-3.5 h-3.5 mr-1.5" />
@@ -109,14 +130,7 @@ export function Settings() {
               </div>
               <p className="text-xs text-muted-foreground">JPG, PNG or WebP · Max 5 MB</p>
             </div>
-
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              className="hidden"
-              onChange={handlePhotoChange}
-            />
+            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePhotoChange} />
           </div>
         </CardContent>
       </Card>
@@ -133,23 +147,11 @@ export function Settings() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Full Name</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => set("name", e.target.value)}
-                  placeholder="Your name"
-                />
+                <Input id="name" value={formData.name} onChange={(e) => set("name", e.target.value)} placeholder="Your name" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="age">Age (years)</Label>
-                <Input
-                  id="age"
-                  type="number"
-                  min={10}
-                  max={120}
-                  value={formData.age}
-                  onChange={(e) => set("age", Number(e.target.value))}
-                />
+                <Input id="age" type="number" min={10} max={120} value={formData.age} onChange={(e) => set("age", Number(e.target.value))} />
               </div>
               <div className="space-y-2">
                 <Label>Gender</Label>
@@ -164,38 +166,15 @@ export function Settings() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="height">Height (cm)</Label>
-                <Input
-                  id="height"
-                  type="number"
-                  min={100}
-                  max={250}
-                  value={formData.height}
-                  onChange={(e) => set("height", Number(e.target.value))}
-                />
+                <Input id="height" type="number" min={100} max={250} value={formData.height} onChange={(e) => set("height", Number(e.target.value))} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="weight">Current Weight (kg)</Label>
-                <Input
-                  id="weight"
-                  type="number"
-                  min={30}
-                  max={300}
-                  step={0.1}
-                  value={formData.weight}
-                  onChange={(e) => set("weight", Number(e.target.value))}
-                />
+                <Input id="weight" type="number" min={30} max={300} step={0.1} value={formData.weight} onChange={(e) => set("weight", Number(e.target.value))} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="targetWeight">Target Weight (kg)</Label>
-                <Input
-                  id="targetWeight"
-                  type="number"
-                  min={30}
-                  max={300}
-                  step={0.1}
-                  value={formData.targetWeight}
-                  onChange={(e) => set("targetWeight", Number(e.target.value))}
-                />
+                <Input id="targetWeight" type="number" min={30} max={300} step={0.1} value={formData.targetWeight} onChange={(e) => set("targetWeight", Number(e.target.value))} />
               </div>
             </div>
           </form>
@@ -239,16 +218,11 @@ export function Settings() {
             <div className="space-y-2 md:col-span-2">
               <Label htmlFor="dailyCalorieGoal">Manual Calorie Override (kcal/day)</Label>
               <Input
-                id="dailyCalorieGoal"
-                type="number"
-                min={800}
-                max={6000}
+                id="dailyCalorieGoal" type="number" min={800} max={6000}
                 value={formData.dailyCalorieGoal}
                 onChange={(e) => set("dailyCalorieGoal", Number(e.target.value))}
               />
-              <p className="text-xs text-muted-foreground">
-                Leave as-is to use the auto-calculated TDEE, or set a custom value.
-              </p>
+              <p className="text-xs text-muted-foreground">Leave as-is to use the auto-calculated TDEE, or set a custom value.</p>
             </div>
           </div>
         </CardContent>
@@ -292,55 +266,158 @@ export function Settings() {
         </CardContent>
       </Card>
 
-      {/* How data is saved */}
+      {/* Change Password */}
       <Card className="bg-card/50 backdrop-blur-sm border-border/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <HardDrive className="w-5 h-5 text-primary" /> How Your Data is Saved
+            <ShieldCheck className="w-5 h-5 text-primary" /> Change Password
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-3 text-sm">
-            <div className="flex gap-3 p-3 rounded-lg bg-background/50 border border-border/40">
-              <HardDrive className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-              <div>
-                <p className="font-medium">Local Storage (your browser)</p>
-                <p className="text-muted-foreground text-xs mt-0.5">
-                  All your data — profile, workouts, steps, meals, measurements, and photo — is stored directly in your browser's localStorage under the key <code className="bg-background px-1 py-0.5 rounded text-primary text-[11px]">fitness-dashboard-storage</code>.
-                </p>
+        <CardContent>
+          <form onSubmit={handleChangePassword} className="space-y-4">
+            {username && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-sm text-emerald-400">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>Signed in as <strong>@{username}</strong></span>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="currentPw">Current Password</Label>
+              <div className="relative">
+                <Input
+                  id="currentPw"
+                  type={showCurrentPw ? "text" : "password"}
+                  value={currentPw}
+                  onChange={(e) => setCurrentPw(e.target.value)}
+                  placeholder="Enter current password"
+                  className="pr-10"
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPw((p) => !p)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showCurrentPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
-            <div className="flex gap-3 p-3 rounded-lg bg-background/50 border border-border/40">
-              <RefreshCw className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
-              <div>
-                <p className="font-medium">Persists across sessions</p>
-                <p className="text-muted-foreground text-xs mt-0.5">
-                  Data survives page refreshes, tab closes, and browser restarts. It is automatically re-loaded every time you open the app.
-                </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="newPw">New Password</Label>
+                <div className="relative">
+                  <Input
+                    id="newPw"
+                    type={showNewPw ? "text" : "password"}
+                    value={newPw}
+                    onChange={(e) => setNewPw(e.target.value)}
+                    placeholder="Min 4 characters"
+                    className="pr-10"
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPw((p) => !p)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showNewPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirmPw">Confirm New Password</Label>
+                <Input
+                  id="confirmPw"
+                  type="password"
+                  value={confirmPw}
+                  onChange={(e) => setConfirmPw(e.target.value)}
+                  placeholder="Repeat new password"
+                  autoComplete="new-password"
+                />
               </div>
             </div>
-            <div className="flex gap-3 p-3 rounded-lg bg-background/50 border border-border/40">
-              <User className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
-              <div>
-                <p className="font-medium">Only on this device</p>
-                <p className="text-muted-foreground text-xs mt-0.5">
-                  Data is not sent to any server. It lives only on this browser/device. Switching browsers, clearing site data, or uninstalling the app will erase it.
+
+            {/* Strength indicator */}
+            {newPw.length > 0 && (
+              <div className="space-y-1">
+                <div className="flex gap-1">
+                  {[...Array(4)].map((_, i) => (
+                    <div
+                      key={i}
+                      className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
+                        i < Math.min(Math.floor(newPw.length / 3), 4)
+                          ? newPw.length < 6 ? "bg-red-500" : newPw.length < 9 ? "bg-yellow-500" : "bg-emerald-500"
+                          : "bg-border"
+                      }`}
+                    />
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {newPw.length < 6 ? "Weak" : newPw.length < 9 ? "Fair" : newPw.length < 12 ? "Good" : "Strong"} password
                 </p>
               </div>
+            )}
+
+            {pwError && (
+              <p className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
+                {pwError}
+              </p>
+            )}
+
+            <div className="flex justify-end pt-1">
+              <Button type="submit" disabled={pwLoading} className="min-w-[160px]">
+                {pwLoading ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Updating…</>
+                ) : (
+                  <><ShieldCheck className="w-4 h-4 mr-2" /> Update Password</>
+                )}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      {/* Data Storage Info */}
+      <Card className="bg-card/50 backdrop-blur-sm border-border/50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Database className="w-5 h-5 text-primary" /> Data Storage
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <div className="flex gap-3 p-3 rounded-lg bg-background/50 border border-border/40">
+            <Database className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+            <div>
+              <p className="font-medium">PostgreSQL Database (Replit)</p>
+              <p className="text-muted-foreground text-xs mt-0.5">
+                All your fitness data — profile, workouts, steps, meals, measurements, and photo — is securely stored in a PostgreSQL database tied to your account. Data is available on any device after logging in.
+              </p>
             </div>
           </div>
-
-          <div className="flex items-center justify-between p-3 rounded-lg bg-background/50 border border-border/40">
+          <div className="flex gap-3 p-3 rounded-lg bg-background/50 border border-border/40">
+            <RefreshCw className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
             <div>
-              <p className="text-sm font-medium">Storage used</p>
-              <p className="text-xs text-muted-foreground">Current data size on this device</p>
+              <p className="font-medium">Cross-device sync</p>
+              <p className="text-muted-foreground text-xs mt-0.5">
+                Log in with your username and password from any browser or device to access your data. Your session stays active for 30 days.
+              </p>
             </div>
-            <span className="text-sm font-bold text-primary">{storageSize} KB</span>
+          </div>
+          <div className="flex gap-3 p-3 rounded-lg bg-background/50 border border-border/40">
+            <ShieldCheck className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-medium">Secure & private</p>
+              <p className="text-muted-foreground text-xs mt-0.5">
+                Passwords are hashed with bcrypt — they are never stored in plain text. Your auth token lives only in your browser's localStorage.
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Save */}
+      {/* Save profile button */}
       <div className="flex justify-end pb-4">
         <Button form="profile-form" type="submit" size="lg" onClick={handleSubmit} className="px-10">
           Save All Changes
