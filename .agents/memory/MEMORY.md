@@ -1,0 +1,1 @@
+- [TermFit Auth Architecture](termfit-auth.md) — JWT auth + PostgreSQL backend; token in localStorage, all fitness data in DB per user.

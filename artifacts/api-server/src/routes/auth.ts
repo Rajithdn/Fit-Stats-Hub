@@ -1,0 +1,57 @@
+import { Router } from "express";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import { db } from "@workspace/db";
+import { users, userProfiles } from "@workspace/db/schema";
+import { eq } from "drizzle-orm";
+import { JWT_SECRET } from "../middlewares/auth.js";
+
+const router = Router();
+
+router.post("/register", async (req, res) => {
+  try {
+    const { username, password } = req.body as { username: string; password: string };
+    if (!username?.trim() || !password || password.length < 4) {
+      res.status(400).json({ error: "Username and password (min 4 chars) required" });
+      return;
+    }
+    const existing = await db.select().from(users).where(eq(users.username, username.trim().toLowerCase())).limit(1);
+    if (existing.length > 0) {
+      res.status(409).json({ error: "Username already taken" });
+      return;
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
+    const [user] = await db.insert(users).values({ username: username.trim().toLowerCase(), passwordHash }).returning();
+    await db.insert(userProfiles).values({ userId: user.id });
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "30d" });
+    res.status(201).json({ token, username: user.username, userId: user.id });
+  } catch (err) {
+    res.status(500).json({ error: "Registration failed" });
+  }
+});
+
+router.post("/login", async (req, res) => {
+  try {
+    const { username, password } = req.body as { username: string; password: string };
+    if (!username?.trim() || !password) {
+      res.status(400).json({ error: "Username and password required" });
+      return;
+    }
+    const [user] = await db.select().from(users).where(eq(users.username, username.trim().toLowerCase())).limit(1);
+    if (!user) {
+      res.status(401).json({ error: "Invalid username or password" });
+      return;
+    }
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) {
+      res.status(401).json({ error: "Invalid username or password" });
+      return;
+    }
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "30d" });
+    res.json({ token, username: user.username, userId: user.id });
+  } catch {
+    res.status(500).json({ error: "Login failed" });
+  }
+});
+
+export default router;

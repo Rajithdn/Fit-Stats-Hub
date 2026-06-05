@@ -13,6 +13,7 @@ import {
   Home,
   Footprints,
   Ruler,
+  LogOut,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -37,7 +38,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onNavClick }: SidebarProps) {
-  const { activeSection, setActiveSection, userProfile, profilePhoto } = useStore();
+  const { activeSection, setActiveSection, userProfile, profilePhoto, username, logout } = useStore();
 
   const initials = userProfile.name
     .split(" ")
@@ -119,11 +120,20 @@ export function Sidebar({ onNavClick }: SidebarProps) {
         })}
       </nav>
 
-      <div className="px-3 pb-2">
-        <div className="p-3 rounded-xl bg-card border border-border/50 text-xs text-muted-foreground">
-          <p className="font-medium text-foreground mb-0.5">PRO ACTIVE</p>
-          <p>Syncing data from Apple Health &amp; MyFitnessPal.</p>
-        </div>
+      <div className="px-3 pb-2 space-y-2">
+        {username && (
+          <div className="px-3 py-2 rounded-lg bg-card border border-border/50 text-xs text-muted-foreground flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+            <span className="truncate">@{username}</span>
+          </div>
+        )}
+        <button
+          onClick={() => { logout(); onNavClick(); }}
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-red-400 hover:bg-red-400/10 transition-colors group"
+        >
+          <LogOut className="w-4 h-4 shrink-0" />
+          <span>Sign Out</span>
+        </button>
       </div>
 
       <div className="px-4 pb-4 pt-1 text-center">
