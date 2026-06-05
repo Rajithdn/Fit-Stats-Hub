@@ -5,7 +5,7 @@ import { Progress } from "@/components/ui/progress";
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from "recharts";
-import { Activity, Flame, Droplets, Moon, Dumbbell, Apple, Zap, TrendingDown, TrendingUp, Minus } from "lucide-react";
+import { Activity, Flame, Droplets, Moon, Dumbbell, Apple, Zap, TrendingUp, Minus, Beef, Wheat, Salad } from "lucide-react";
 
 function MacroPieChart({ protein, carbs, fat }: { protein: number; carbs: number; fat: number }) {
   const total = protein + carbs + fat || 1;
@@ -102,9 +102,18 @@ export function Dashboard() {
 
   // Calculate Macros from log
   const consumedCalories = dailyLog.foods.reduce((acc, f) => acc + f.calories, 0);
-  const consumedProtein = dailyLog.foods.reduce((acc, f) => acc + f.protein, 0);
-  const consumedCarbs = dailyLog.foods.reduce((acc, f) => acc + f.carbs, 0);
-  const consumedFat = dailyLog.foods.reduce((acc, f) => acc + f.fat, 0);
+  const consumedProtein  = dailyLog.foods.reduce((acc, f) => acc + f.protein, 0);
+  const consumedCarbs    = dailyLog.foods.reduce((acc, f) => acc + f.carbs, 0);
+  const consumedFat      = dailyLog.foods.reduce((acc, f) => acc + f.fat, 0);
+  const consumedFiber    = dailyLog.foods.reduce((acc, f) => acc + (f.fiber ?? 0), 0);
+
+  // Macro goals derived from profile
+  const goalCalories = userProfile.dailyCalorieGoal;
+  const goalProtein  = Math.round(userProfile.weight * 2.0);
+  const goalFat      = Math.round((goalCalories * 0.25) / 9);
+  const goalCarbs    = Math.round((goalCalories - goalProtein * 4 - goalFat * 9) / 4);
+  const goalFiber    = userProfile.gender === "female" ? 25 : 38;
+  const goalWater    = 3.0;
 
   const pieData = [
     { name: 'Protein', value: consumedProtein || 1 },
@@ -257,6 +266,85 @@ export function Dashboard() {
               />
             </div>
             <span className="shrink-0 font-mono font-semibold text-foreground">×{multiplier}</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Daily Nutrition Progress */}
+      <Card className="bg-card/50 backdrop-blur-sm border-border/50" data-testid="card-nutrition-progress">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2">
+            <Salad className="w-5 h-5 text-primary" />
+            Daily Nutrition Progress
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
+            {[
+              {
+                label: "Calories", icon: <Flame className="w-3.5 h-3.5" />,
+                consumed: consumedCalories, goal: goalCalories, unit: "kcal",
+                color: "#10b981", bg: "rgba(16,185,129,0.15)",
+              },
+              {
+                label: "Protein", icon: <Beef className="w-3.5 h-3.5" />,
+                consumed: Math.round(consumedProtein), goal: goalProtein, unit: "g",
+                color: "#3b82f6", bg: "rgba(59,130,246,0.15)",
+              },
+              {
+                label: "Carbohydrates", icon: <Wheat className="w-3.5 h-3.5" />,
+                consumed: Math.round(consumedCarbs), goal: goalCarbs, unit: "g",
+                color: "#f59e0b", bg: "rgba(245,158,11,0.15)",
+              },
+              {
+                label: "Fat", icon: <Zap className="w-3.5 h-3.5" />,
+                consumed: Math.round(consumedFat), goal: goalFat, unit: "g",
+                color: "#f43f5e", bg: "rgba(244,63,94,0.15)",
+              },
+              {
+                label: "Fiber", icon: <Salad className="w-3.5 h-3.5" />,
+                consumed: Math.round(consumedFiber), goal: goalFiber, unit: "g",
+                color: "#a78bfa", bg: "rgba(167,139,250,0.15)",
+              },
+              {
+                label: "Water", icon: <Droplets className="w-3.5 h-3.5" />,
+                consumed: dailyLog.water, goal: goalWater, unit: "L",
+                color: "#60a5fa", bg: "rgba(96,165,250,0.15)",
+              },
+            ].map((row) => {
+              const pct = Math.min(100, (row.consumed / row.goal) * 100);
+              const over = row.consumed > row.goal;
+              return (
+                <div key={row.label} className="space-y-1.5" data-testid={`nutrition-row-${row.label.toLowerCase()}`}>
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-1.5" style={{ color: row.color }}>
+                      {row.icon}
+                      <span className="font-medium text-foreground">{row.label}</span>
+                    </div>
+                    <div className="font-mono text-xs">
+                      <span className={over ? "text-rose-400 font-bold" : "text-foreground font-semibold"}>
+                        {row.consumed}
+                      </span>
+                      <span className="text-muted-foreground"> / {row.goal} {row.unit}</span>
+                    </div>
+                  </div>
+                  {/* Track */}
+                  <div className="h-2.5 rounded-full overflow-hidden" style={{ backgroundColor: row.bg }}>
+                    <div
+                      className="h-full rounded-full transition-all duration-700 ease-out"
+                      style={{
+                        width: `${pct}%`,
+                        backgroundColor: over ? "#f43f5e" : row.color,
+                      }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-[10px] text-muted-foreground">
+                    <span>{Math.round(pct)}% of daily goal</span>
+                    <span>{row.goal - row.consumed > 0 ? `${Math.round(row.goal - row.consumed)} ${row.unit} remaining` : "Goal reached!"}</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </CardContent>
       </Card>
