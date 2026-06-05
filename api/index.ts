@@ -93,7 +93,7 @@ const dailyLogs = pgTable("daily_logs", {
 
 // ── DB ────────────────────────────────────────────────────────────────────────
 const { Pool } = pg;
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new Pool({ connectionString: process.env.NEON_DATABASE_URL || process.env.DATABASE_URL });
 const db = drizzle(pool);
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
