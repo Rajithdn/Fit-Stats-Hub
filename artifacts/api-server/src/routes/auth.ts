@@ -10,7 +10,13 @@ const router = Router();
 
 router.post("/register", async (req, res) => {
   try {
-    const { username, password } = req.body as { username: string; password: string };
+    const { username, password, age, gender, goal } = req.body as {
+      username: string;
+      password: string;
+      age?: number;
+      gender?: string;
+      goal?: string;
+    };
     if (!username?.trim() || !password || password.length < 4) {
       res.status(400).json({ error: "Username and password (min 4 chars) required" });
       return;
@@ -22,10 +28,16 @@ router.post("/register", async (req, res) => {
     }
     const passwordHash = await bcrypt.hash(password, 10);
     const [user] = await db.insert(users).values({ username: username.trim().toLowerCase(), passwordHash }).returning();
-    await db.insert(userProfiles).values({ userId: user.id });
+    await db.insert(userProfiles).values({
+      userId: user.id,
+      age: age ?? 25,
+      gender: gender ?? "male",
+      goal: goal ?? "Weight Loss",
+    });
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "30d" });
     res.status(201).json({ token, username: user.username, userId: user.id });
   } catch (err) {
+    console.error("Registration error:", err);
     res.status(500).json({ error: "Registration failed" });
   }
 });
@@ -49,7 +61,8 @@ router.post("/login", async (req, res) => {
     }
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "30d" });
     res.json({ token, username: user.username, userId: user.id });
-  } catch {
+  } catch (err) {
+    console.error("Login error:", err);
     res.status(500).json({ error: "Login failed" });
   }
 });

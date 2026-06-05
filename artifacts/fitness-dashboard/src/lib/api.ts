@@ -1,11 +1,30 @@
 const TOKEN_KEY = 'termfit-auth-token';
+const REMEMBER_KEY = 'termfit-remember-me';
 
-let authToken: string | null = localStorage.getItem(TOKEN_KEY);
+let authToken: string | null = null;
 
-export function setToken(token: string | null) {
+function loadToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY);
+}
+
+authToken = loadToken();
+
+export function setToken(token: string | null, remember = true) {
   authToken = token;
-  if (token) localStorage.setItem(TOKEN_KEY, token);
-  else localStorage.removeItem(TOKEN_KEY);
+  if (token) {
+    if (remember) {
+      localStorage.setItem(TOKEN_KEY, token);
+      localStorage.setItem(REMEMBER_KEY, '1');
+    } else {
+      sessionStorage.setItem(TOKEN_KEY, token);
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(REMEMBER_KEY);
+    }
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(REMEMBER_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
+  }
 }
 
 export function getToken(): string | null {
@@ -15,6 +34,8 @@ export function getToken(): string | null {
 export function clearToken() {
   authToken = null;
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REMEMBER_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
 }
 
 export async function apiFetch<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
