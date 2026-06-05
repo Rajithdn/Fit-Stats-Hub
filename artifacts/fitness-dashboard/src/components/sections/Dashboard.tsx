@@ -1,10 +1,11 @@
+import { useState } from "react";
 import { useStore } from "@/store/useStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from "recharts";
-import { Activity, Flame, Droplets, Moon, Dumbbell, Apple } from "lucide-react";
+import { Activity, Flame, Droplets, Moon, Dumbbell, Apple, Zap, TrendingDown, TrendingUp, Minus } from "lucide-react";
 
 function MacroPieChart({ protein, carbs, fat }: { protein: number; carbs: number; fat: number }) {
   const total = protein + carbs + fat || 1;
@@ -65,8 +66,17 @@ const weightData = Array.from({ length: 30 }).map((_, i) => ({
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b'];
 
+const ACTIVITY_LEVELS = [
+  { label: "Sedentary",        desc: "Little or no exercise",          multiplier: 1.2   },
+  { label: "Lightly Active",   desc: "Light exercise 1–3 days/week",   multiplier: 1.375 },
+  { label: "Moderately Active",desc: "Moderate exercise 3–5 days/week",multiplier: 1.55  },
+  { label: "Very Active",      desc: "Hard exercise 6–7 days/week",    multiplier: 1.725 },
+  { label: "Super Active",     desc: "Very hard exercise + physical job",multiplier: 1.9  },
+];
+
 export function Dashboard() {
   const { userProfile, dailyLog } = useStore();
+  const [activityIdx, setActivityIdx] = useState(2);
 
   // Calculate BMI
   const heightM = userProfile.height / 100;
@@ -77,6 +87,18 @@ export function Dashboard() {
   if (bmiNum < 18.5) { bmiCategory = "Underweight"; bmiColor = "text-blue-500"; }
   else if (bmiNum > 25) { bmiCategory = "Overweight"; bmiColor = "text-amber-500"; }
   else if (bmiNum > 30) { bmiCategory = "Obese"; bmiColor = "text-rose-500"; }
+
+  // BMR — Mifflin-St Jeor
+  const bmr = Math.round(
+    10 * userProfile.weight +
+    6.25 * userProfile.height -
+    5 * userProfile.age +
+    (userProfile.gender === "male" ? 5 : -161)
+  );
+  const { multiplier, label: actLabel, desc: actDesc } = ACTIVITY_LEVELS[activityIdx];
+  const maintenance = Math.round(bmr * multiplier);
+  const cutting     = maintenance - 500;
+  const bulking     = maintenance + 500;
 
   // Calculate Macros from log
   const consumedCalories = dailyLog.foods.reduce((acc, f) => acc + f.calories, 0);
@@ -146,6 +168,98 @@ export function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* BMR & TDEE Card */}
+      <Card className="bg-card/50 backdrop-blur-sm border-border/50" data-testid="card-bmr-tdee">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2">
+            <Zap className="w-5 h-5 text-primary" />
+            BMR &amp; TDEE Calculator
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {/* Slider */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Activity Level</span>
+              <span className="text-sm font-semibold text-primary">{actLabel}</span>
+            </div>
+            <input
+              data-testid="slider-activity"
+              type="range"
+              min={0}
+              max={4}
+              step={1}
+              value={activityIdx}
+              onChange={(e) => setActivityIdx(Number(e.target.value))}
+              className="w-full h-2 rounded-full appearance-none cursor-pointer"
+              style={{
+                background: `linear-gradient(to right, #10b981 0%, #10b981 ${activityIdx * 25}%, #1e293b ${activityIdx * 25}%, #1e293b 100%)`,
+              }}
+            />
+            <div className="flex justify-between text-[10px] text-muted-foreground px-0.5">
+              {ACTIVITY_LEVELS.map((a, i) => (
+                <span
+                  key={a.label}
+                  className={`cursor-pointer transition-colors ${i === activityIdx ? "text-primary font-semibold" : ""}`}
+                  onClick={() => setActivityIdx(i)}
+                >
+                  {a.label.split(" ")[0]}
+                </span>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground text-center italic">{actDesc}</p>
+          </div>
+
+          {/* Values grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="rounded-xl p-3 bg-muted/30 border border-border/40 text-center space-y-1">
+              <p className="text-[11px] text-muted-foreground uppercase tracking-wide">BMR</p>
+              <p className="text-2xl font-bold font-mono text-foreground" data-testid="value-bmr">{bmr.toLocaleString()}</p>
+              <p className="text-[10px] text-muted-foreground">kcal / day at rest</p>
+            </div>
+            <div className="rounded-xl p-3 border text-center space-y-1" style={{ background: "rgba(16,185,129,0.08)", borderColor: "rgba(16,185,129,0.25)" }}>
+              <div className="flex items-center justify-center gap-1">
+                <Minus className="w-3 h-3 text-blue-400" />
+                <p className="text-[11px] text-blue-400 uppercase tracking-wide">Cutting</p>
+              </div>
+              <p className="text-2xl font-bold font-mono text-blue-400" data-testid="value-cutting">{cutting.toLocaleString()}</p>
+              <p className="text-[10px] text-muted-foreground">kcal • −500 deficit</p>
+            </div>
+            <div className="rounded-xl p-3 border text-center space-y-1" style={{ background: "rgba(16,185,129,0.1)", borderColor: "rgba(16,185,129,0.35)" }}>
+              <div className="flex items-center justify-center gap-1">
+                <Flame className="w-3 h-3 text-primary" />
+                <p className="text-[11px] text-primary uppercase tracking-wide">Maintenance</p>
+              </div>
+              <p className="text-2xl font-bold font-mono text-primary" data-testid="value-maintenance">{maintenance.toLocaleString()}</p>
+              <p className="text-[10px] text-muted-foreground">kcal • TDEE</p>
+            </div>
+            <div className="rounded-xl p-3 border text-center space-y-1" style={{ background: "rgba(245,158,11,0.08)", borderColor: "rgba(245,158,11,0.25)" }}>
+              <div className="flex items-center justify-center gap-1">
+                <TrendingUp className="w-3 h-3 text-amber-400" />
+                <p className="text-[11px] text-amber-400 uppercase tracking-wide">Bulking</p>
+              </div>
+              <p className="text-2xl font-bold font-mono text-amber-400" data-testid="value-bulking">{bulking.toLocaleString()}</p>
+              <p className="text-[10px] text-muted-foreground">kcal • +500 surplus</p>
+            </div>
+          </div>
+
+          {/* Multiplier bar */}
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="shrink-0">Activity multiplier</span>
+            <div className="flex-1 h-1.5 rounded-full bg-muted/40 overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-300"
+                style={{
+                  width: `${((multiplier - 1.2) / (1.9 - 1.2)) * 100}%`,
+                  backgroundColor: "#10b981",
+                }}
+              />
+            </div>
+            <span className="shrink-0 font-mono font-semibold text-foreground">×{multiplier}</span>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Weight Progress Chart */}
