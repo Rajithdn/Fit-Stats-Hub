@@ -207,8 +207,26 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use((_req, _res, next) => { ensureDb().then(next).catch(next); });
 
-// Health
-app.get("/api/health", (_req, res) => res.json({ ok: true }));
+// Health / diagnostics
+app.get("/api/health", async (_req, res) => {
+  const dbUrl = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL;
+  const dbConfigured = !!dbUrl;
+  let dbConnected = false;
+  let dbError = "";
+  if (dbConfigured) {
+    try {
+      await pool.query("SELECT 1");
+      dbConnected = true;
+    } catch (e: any) {
+      dbError = e.message;
+    }
+  }
+  res.json({
+    ok: dbConnected,
+    db: dbConfigured ? (dbConnected ? "connected" : "error") : "missing DATABASE_URL",
+    dbError: dbError || undefined,
+  });
+});
 
 // ── Auth routes ───────────────────────────────────────────────────────────────
 app.post("/api/auth/register", async (req, res) => {
