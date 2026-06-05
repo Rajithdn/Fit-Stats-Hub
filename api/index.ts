@@ -93,7 +93,9 @@ const dailyLogs = pgTable("daily_logs", {
 
 // ── DB ────────────────────────────────────────────────────────────────────────
 const { Pool } = pg;
-const pool = new Pool({ connectionString: process.env.NEON_DATABASE_URL || process.env.DATABASE_URL });
+const dbUrl = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL;
+if (!dbUrl) throw new Error("No DATABASE_URL or NEON_DATABASE_URL set");
+const pool = new Pool({ connectionString: dbUrl, ssl: { rejectUnauthorized: false } });
 const db = drizzle(pool);
 
 // Auto-create tables on first request (needed for Vercel / fresh databases)
