@@ -11,6 +11,7 @@ import { DailySteps } from "@/components/sections/DailySteps";
 import { BodyMeasurements } from "@/components/sections/BodyMeasurements";
 import { HealthReportAnalyzer } from "@/components/sections/HealthReportAnalyzer";
 import { ProgressTracker } from "@/components/sections/ProgressTracker";
+import { ProgressPhotos } from "@/components/sections/ProgressPhotos";
 import { AICoach } from "@/components/sections/AICoach";
 import { Settings } from "@/components/sections/Settings";
 import { Layout } from "@/components/Layout";
@@ -82,6 +83,7 @@ export default function App() {
       case "Body Measurements":return <BodyMeasurements />;
       case "Health Report Analyzer": return <HealthReportAnalyzer />;
       case "Progress Tracker": return <ProgressTracker />;
+      case "Progress Photos":  return <ProgressPhotos />;
       case "AI Coach":         return <AICoach />;
       case "Settings":         return <Settings />;
       default:                 return <Dashboard />;

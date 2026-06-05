@@ -14,6 +14,7 @@ import {
   Footprints,
   Ruler,
   LogOut,
+  Camera,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,7 @@ const menuItems = [
   { id: "Home Workout",           icon: Home },
   { id: "Daily Steps",            icon: Footprints },
   { id: "Body Measurements",      icon: Ruler },
+  { id: "Progress Photos",        icon: Camera },
   { id: "Health Report Analyzer", icon: FileText },
   { id: "Progress Tracker",       icon: TrendingUp },
   { id: "AI Coach",               icon: MessageSquare },
