@@ -1,16 +1,15 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useStore, FoodEntry } from "@/store/useStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Plus, Trash2, Flame, Beef, Wheat, Zap, Droplets } from "lucide-react";
+import { Search, Plus, Trash2, Flame, Beef, Wheat, Zap, Droplets, Globe, Database, Loader2, AlertCircle } from "lucide-react";
 
 type FoodRow = Omit<FoodEntry, "id"> & { category: string };
 
 const FOOD_DB: FoodRow[] = [
-  // Proteins
   { name: "Egg (1 Large)",             calories: 72,  protein: 6.3, carbs: 0.4, fat: 4.8,  fiber: 0,   category: "Protein" },
   { name: "Chicken Breast (100g)",     calories: 165, protein: 31,  carbs: 0,   fat: 3.6,  fiber: 0,   category: "Protein" },
   { name: "Grilled Salmon (100g)",     calories: 208, protein: 20,  carbs: 0,   fat: 13,   fiber: 0,   category: "Protein" },
@@ -23,8 +22,6 @@ const FOOD_DB: FoodRow[] = [
   { name: "Turkey Breast (100g)",      calories: 135, protein: 30,  carbs: 0,   fat: 1,    fiber: 0,   category: "Protein" },
   { name: "Tofu, Firm (100g)",         calories: 76,  protein: 8,   carbs: 2,   fat: 4,    fiber: 0.3, category: "Protein" },
   { name: "Lentils, Cooked (100g)",    calories: 116, protein: 9,   carbs: 20,  fat: 0.4,  fiber: 8,   category: "Protein" },
-
-  // Carbs
   { name: "Brown Rice, Cooked (100g)", calories: 123, protein: 2.7, carbs: 26,  fat: 0.9,  fiber: 1.8, category: "Carbs" },
   { name: "White Rice, Cooked (100g)", calories: 130, protein: 2.7, carbs: 28,  fat: 0.3,  fiber: 0.4, category: "Carbs" },
   { name: "Oats (50g dry)",            calories: 195, protein: 6.5, carbs: 33,  fat: 3.5,  fiber: 5,   category: "Carbs" },
@@ -32,8 +29,6 @@ const FOOD_DB: FoodRow[] = [
   { name: "Sweet Potato (100g)",       calories: 86,  protein: 1.6, carbs: 20,  fat: 0.1,  fiber: 3,   category: "Carbs" },
   { name: "Quinoa, Cooked (100g)",     calories: 120, protein: 4.4, carbs: 21,  fat: 1.9,  fiber: 2.8, category: "Carbs" },
   { name: "Pasta, Cooked (100g)",      calories: 158, protein: 5.8, carbs: 31,  fat: 0.9,  fiber: 1.8, category: "Carbs" },
-
-  // Fruits
   { name: "Banana (1 Medium)",         calories: 105, protein: 1.3, carbs: 27,  fat: 0.3,  fiber: 3.1, category: "Fruits" },
   { name: "Apple (1 Medium)",          calories: 95,  protein: 0.5, carbs: 25,  fat: 0.3,  fiber: 4.4, category: "Fruits" },
   { name: "Orange (1 Medium)",         calories: 62,  protein: 1.2, carbs: 15,  fat: 0.2,  fiber: 3.1, category: "Fruits" },
@@ -41,26 +36,19 @@ const FOOD_DB: FoodRow[] = [
   { name: "Blueberries (100g)",        calories: 57,  protein: 0.7, carbs: 14,  fat: 0.3,  fiber: 2.4, category: "Fruits" },
   { name: "Avocado (½ medium)",        calories: 120, protein: 1.5, carbs: 6.5, fat: 11,   fiber: 5,   category: "Fruits" },
   { name: "Mango (100g)",              calories: 60,  protein: 0.8, carbs: 15,  fat: 0.4,  fiber: 1.6, category: "Fruits" },
-
-  // Vegetables
   { name: "Broccoli (100g)",           calories: 34,  protein: 2.8, carbs: 7,   fat: 0.4,  fiber: 2.6, category: "Vegetables" },
   { name: "Spinach (100g)",            calories: 23,  protein: 2.9, carbs: 3.6, fat: 0.4,  fiber: 2.2, category: "Vegetables" },
   { name: "Carrot (100g)",             calories: 41,  protein: 0.9, carbs: 10,  fat: 0.2,  fiber: 2.8, category: "Vegetables" },
-
-  // Fats
   { name: "Almonds (30g)",             calories: 170, protein: 6,   carbs: 6,   fat: 15,   fiber: 3.5, category: "Fats" },
   { name: "Peanut Butter (2 tbsp)",    calories: 190, protein: 8,   carbs: 7,   fat: 16,   fiber: 2,   category: "Fats" },
   { name: "Olive Oil (1 tbsp)",        calories: 119, protein: 0,   carbs: 0,   fat: 14,   fiber: 0,   category: "Fats" },
   { name: "Walnuts (30g)",             calories: 185, protein: 4,   carbs: 4,   fat: 18,   fiber: 2,   category: "Fats" },
-
-  // Dairy
   { name: "Milk, Whole (250ml)",       calories: 150, protein: 8,   carbs: 12,  fat: 8,    fiber: 0,   category: "Dairy" },
   { name: "Milk, Skim (250ml)",        calories: 90,  protein: 9,   carbs: 13,  fat: 0.2,  fiber: 0,   category: "Dairy" },
   { name: "Cheddar Cheese (30g)",      calories: 120, protein: 7,   carbs: 0.5, fat: 10,   fiber: 0,   category: "Dairy" },
 ];
 
 const CATEGORIES = ["All", "Protein", "Carbs", "Fruits", "Vegetables", "Fats", "Dairy"];
-
 const SERVINGS_OPTIONS = ["0.5×", "1×", "1.5×", "2×", "3×"];
 
 function scaleFood(food: FoodRow, mult: number): Omit<FoodEntry, "id"> {
@@ -81,11 +69,53 @@ const MACRO_COLORS = {
   fat:      "#f43f5e",
 };
 
+type OnlineResult = {
+  name: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+  brand?: string;
+};
+
+async function searchOnlineFoods(query: string): Promise<OnlineResult[]> {
+  const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&json=1&page_size=20&fields=product_name,brands,nutriments&search_simple=1&action=process`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Network error");
+  const data = await res.json();
+  const results: OnlineResult[] = [];
+  for (const p of data.products ?? []) {
+    const n = p.nutriments ?? {};
+    const cal = n["energy-kcal_100g"] ?? n["energy-kcal"] ?? 0;
+    const name = p.product_name?.trim();
+    if (!name || cal === 0) continue;
+    results.push({
+      name: `${name} (100g)`,
+      brand: p.brands?.split(",")[0]?.trim() ?? "",
+      calories: Math.round(cal),
+      protein:  Math.round((n["proteins_100g"] ?? 0) * 10) / 10,
+      carbs:    Math.round((n["carbohydrates_100g"] ?? 0) * 10) / 10,
+      fat:      Math.round((n["fat_100g"] ?? 0) * 10) / 10,
+      fiber:    Math.round((n["fiber_100g"] ?? 0) * 10) / 10,
+    });
+  }
+  return results.slice(0, 15);
+}
+
 export function Nutrition() {
   const { dailyLog, addFoodToLog, removeFoodFromLog } = useStore();
-  const [searchTerm, setSearchTerm]   = useState("");
+
+  const [tab, setTab] = useState<"local" | "online">("local");
+  const [searchTerm, setSearchTerm] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
-  const [servings, setServings]       = useState<Record<string, number>>({});
+  const [servings, setServings] = useState<Record<string, number>>({});
+
+  const [onlineQuery, setOnlineQuery] = useState("");
+  const [onlineResults, setOnlineResults] = useState<OnlineResult[]>([]);
+  const [onlineLoading, setOnlineLoading] = useState(false);
+  const [onlineError, setOnlineError] = useState("");
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const getServing = (name: string) => servings[name] ?? 1;
 
@@ -101,6 +131,25 @@ export function Nutrition() {
     carbs:    Math.round(dailyLog.foods.reduce((a, f) => a + f.carbs, 0)   * 10) / 10,
     fat:      Math.round(dailyLog.foods.reduce((a, f) => a + f.fat, 0)     * 10) / 10,
   };
+
+  function handleOnlineSearch(q: string) {
+    setOnlineQuery(q);
+    setOnlineError("");
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (!q.trim()) { setOnlineResults([]); return; }
+    searchTimer.current = setTimeout(async () => {
+      setOnlineLoading(true);
+      try {
+        const res = await searchOnlineFoods(q);
+        setOnlineResults(res);
+        if (res.length === 0) setOnlineError("No results found. Try a different name.");
+      } catch {
+        setOnlineError("Search failed. Check your internet connection.");
+      } finally {
+        setOnlineLoading(false);
+      }
+    }, 600);
+  }
 
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -134,93 +183,160 @@ export function Nutrition() {
             <CardTitle className="flex items-center gap-2 text-base">
               <Search className="w-4 h-4 text-primary" /> Food Search
             </CardTitle>
+            {/* Tab switcher */}
+            <div className="flex gap-1 mt-2 bg-background/50 rounded-lg p-1">
+              <button
+                onClick={() => setTab("local")}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs font-medium transition-all ${tab === "local" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <Database className="w-3 h-3" /> Local Database
+              </button>
+              <button
+                onClick={() => setTab("online")}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs font-medium transition-all ${tab === "online" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <Globe className="w-3 h-3" /> Search Online
+              </button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-3">
 
-            {/* Search input */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search 35+ foods…"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9"
-                data-testid="input-food-search"
-              />
-            </div>
-
-            {/* Category filter chips */}
-            <div className="flex gap-1.5 flex-wrap">
-              {CATEGORIES.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setActiveCategory(cat)}
-                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                    activeCategory === cat
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "border-border/50 text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-
-            {/* Food list */}
-            <div className="h-[360px] overflow-y-auto pr-1 space-y-2">
-              {filtered.length === 0 && (
-                <p className="text-center text-sm text-muted-foreground py-12">No foods found.</p>
-              )}
-              {filtered.map((food) => {
-                const mult = getServing(food.name);
-                const scaled = scaleFood(food, mult);
-                return (
-                  <div
-                    key={food.name}
-                    className="flex items-center gap-2 p-2.5 rounded-lg border border-border/40 hover:bg-accent/5 hover:border-primary/20 transition-colors"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 mb-0.5">
-                        <p className="font-medium text-sm truncate">{food.name}</p>
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">{food.category}</Badge>
+            {tab === "local" ? (
+              <>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search 35+ foods…"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+                <div className="flex gap-1.5 flex-wrap">
+                  {CATEGORIES.map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setActiveCategory(cat)}
+                      className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                        activeCategory === cat
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-border/50 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+                <div className="h-[340px] overflow-y-auto pr-1 space-y-2">
+                  {filtered.length === 0 && (
+                    <p className="text-center text-sm text-muted-foreground py-12">No foods found.</p>
+                  )}
+                  {filtered.map((food) => {
+                    const mult = getServing(food.name);
+                    const scaled = scaleFood(food, mult);
+                    return (
+                      <div key={food.name} className="flex items-center gap-2 p-2.5 rounded-lg border border-border/40 hover:bg-accent/5 hover:border-primary/20 transition-colors">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <p className="font-medium text-sm truncate">{food.name}</p>
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">{food.category}</Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            <span className="text-emerald-400 font-medium">{scaled.calories} kcal</span>
+                            {" · "}P {scaled.protein}g · C {scaled.carbs}g · F {scaled.fat}g
+                            {food.fiber > 0 && ` · Fiber ${Math.round(food.fiber * mult * 10) / 10}g`}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <Select
+                            value={String(mult)}
+                            onValueChange={(v) => setServings((s) => ({ ...s, [food.name]: Number(v) }))}
+                          >
+                            <SelectTrigger className="h-7 w-14 text-xs px-2">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {SERVINGS_OPTIONS.map((opt, i) => {
+                                const val = [0.5, 1, 1.5, 2, 3][i];
+                                return <SelectItem key={opt} value={String(val)}>{opt}</SelectItem>;
+                              })}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0 text-primary hover:bg-primary/10 hover:text-primary"
+                            onClick={() => addFoodToLog({ ...scaled, id: `${food.name}-${Date.now()}` })}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        <span className="text-emerald-400 font-medium">{scaled.calories} kcal</span>
-                        {" · "}P {scaled.protein}g · C {scaled.carbs}g · F {scaled.fat}g
-                        {food.fiber > 0 && ` · Fiber ${Math.round(food.fiber * mult * 10) / 10}g`}
-                      </p>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search any food worldwide (e.g. idli, pasta, pizza)…"
+                    value={onlineQuery}
+                    onChange={(e) => handleOnlineSearch(e.target.value)}
+                    className="pl-9"
+                  />
+                  {onlineLoading && (
+                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground animate-spin" />
+                  )}
+                </div>
+
+                <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                  <Globe className="w-3 h-3" />
+                  Powered by Open Food Facts — 3M+ real products
+                </p>
+
+                <div className="h-[320px] overflow-y-auto pr-1 space-y-2">
+                  {!onlineQuery && (
+                    <div className="flex flex-col items-center justify-center h-40 text-muted-foreground gap-2">
+                      <Globe className="w-8 h-8 opacity-30" />
+                      <p className="text-sm text-center">Type any food name to search the global database</p>
                     </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <Select
-                        value={String(mult)}
-                        onValueChange={(v) => setServings((s) => ({ ...s, [food.name]: Number(v) }))}
-                      >
-                        <SelectTrigger className="h-7 w-14 text-xs px-2">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {SERVINGS_OPTIONS.map((opt, i) => {
-                            const val = [0.5, 1, 1.5, 2, 3][i];
-                            return <SelectItem key={opt} value={String(val)}>{opt}</SelectItem>;
-                          })}
-                        </SelectContent>
-                      </Select>
-
+                  )}
+                  {onlineError && (
+                    <div className="flex items-center gap-2 text-amber-400 text-sm p-3 bg-amber-400/10 rounded-lg border border-amber-400/20">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      {onlineError}
+                    </div>
+                  )}
+                  {onlineResults.map((food, idx) => (
+                    <div key={idx} className="flex items-center gap-2 p-2.5 rounded-lg border border-border/40 hover:bg-accent/5 hover:border-primary/20 transition-colors">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                          <p className="font-medium text-sm truncate">{food.name}</p>
+                          {food.brand && (
+                            <span className="text-[10px] text-muted-foreground shrink-0">{food.brand}</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          <span className="text-emerald-400 font-medium">{food.calories} kcal</span>
+                          {" · "}P {food.protein}g · C {food.carbs}g · F {food.fat}g
+                          {food.fiber > 0 && ` · Fiber ${food.fiber}g`}
+                        </p>
+                      </div>
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-7 w-7 p-0 text-primary hover:bg-primary/10 hover:text-primary"
-                        onClick={() => addFoodToLog({ ...scaled, id: `${food.name}-${Date.now()}` })}
-                        data-testid={`button-add-food-${food.name.replace(/\s+/g, "-").toLowerCase()}`}
+                        className="h-7 w-7 p-0 text-primary hover:bg-primary/10 hover:text-primary shrink-0"
+                        onClick={() => addFoodToLog({ ...food, id: `online-${idx}-${Date.now()}` })}
                       >
                         <Plus className="h-4 w-4" />
                       </Button>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  ))}
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -237,8 +353,6 @@ export function Nutrition() {
             </CardTitle>
           </CardHeader>
           <CardContent className="flex-1 flex flex-col gap-3">
-
-            {/* Running macro totals */}
             <div className="grid grid-cols-4 gap-2 p-3 rounded-xl border border-border/40 bg-secondary/10 text-center">
               <div>
                 <p className="text-[10px] text-muted-foreground uppercase">Cal</p>
@@ -257,8 +371,6 @@ export function Nutrition() {
                 <p className="font-bold font-mono text-sm text-rose-400">{totals.fat}g</p>
               </div>
             </div>
-
-            {/* Logged items */}
             <div className="flex-1 overflow-y-auto space-y-2 max-h-[340px] pr-1">
               {dailyLog.foods.length === 0 && (
                 <div className="flex flex-col items-center justify-center h-40 gap-2 text-muted-foreground">
@@ -267,10 +379,7 @@ export function Nutrition() {
                 </div>
               )}
               {dailyLog.foods.map((food, idx) => (
-                <div
-                  key={food.id}
-                  className="flex items-center gap-2 p-2.5 rounded-lg border border-border/40 hover:bg-accent/5 transition-colors group"
-                >
+                <div key={food.id} className="flex items-center gap-2 p-2.5 rounded-lg border border-border/40 hover:bg-accent/5 transition-colors group">
                   <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                     <span className="text-[10px] font-bold text-primary">{idx + 1}</span>
                   </div>
@@ -286,7 +395,6 @@ export function Nutrition() {
                     variant="ghost"
                     className="h-7 w-7 p-0 text-destructive/60 hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={() => removeFoodFromLog(food.id)}
-                    data-testid={`button-remove-food-${food.id}`}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>

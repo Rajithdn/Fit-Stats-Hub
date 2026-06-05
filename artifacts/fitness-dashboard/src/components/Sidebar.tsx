@@ -37,7 +37,14 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onNavClick }: SidebarProps) {
-  const { activeSection, setActiveSection, userProfile } = useStore();
+  const { activeSection, setActiveSection, userProfile, profilePhoto } = useStore();
+
+  const initials = userProfile.name
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 
   return (
     <aside className="w-64 border-r border-border/40 bg-card/80 md:bg-card/30 backdrop-blur-md h-full flex flex-col shrink-0">
@@ -59,15 +66,22 @@ export function Sidebar({ onNavClick }: SidebarProps) {
 
       {userProfile.name && (
         <div className="px-4 pb-3">
-          <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-primary/5 border border-primary/10">
-            <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm shrink-0">
-              {userProfile.name.charAt(0).toUpperCase()}
+          <button
+            onClick={() => { setActiveSection("Settings"); onNavClick(); }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg bg-primary/5 border border-primary/10 hover:bg-primary/10 transition-colors group"
+          >
+            <div className="w-8 h-8 rounded-full border border-border overflow-hidden bg-primary/20 flex items-center justify-center shrink-0">
+              {profilePhoto ? (
+                <img src={profilePhoto} alt="Profile" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-xs font-bold text-primary">{initials || "?"}</span>
+              )}
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 text-left">
               <p className="text-sm font-semibold truncate">{userProfile.name}</p>
               <p className="text-xs text-muted-foreground truncate">{userProfile.goal}</p>
             </div>
-          </div>
+          </button>
         </div>
       )}
 
@@ -83,7 +97,6 @@ export function Sidebar({ onNavClick }: SidebarProps) {
                 setActiveSection(item.id);
                 onNavClick();
               }}
-              data-testid={`sidebar-nav-${item.id.replace(/\s+/g, "-").toLowerCase()}`}
               className={cn(
                 "w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 relative group",
                 isActive

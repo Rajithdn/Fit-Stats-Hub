@@ -63,6 +63,7 @@ export type DailyLog = {
 
 type StoreState = {
   isOnboarded: boolean;
+  profilePhoto: string;
   userProfile: UserProfile;
   dailyLog: DailyLog;
   progressEntries: any[];
@@ -73,6 +74,7 @@ type StoreState = {
   theme: 'dark' | 'light';
   activeSection: string;
   completeOnboarding: (profile: UserProfile) => void;
+  setProfilePhoto: (photo: string) => void;
   updateProfile: (profile: Partial<UserProfile>) => void;
   updateDailyLog: (log: Partial<DailyLog>) => void;
   addFoodToLog: (food: FoodEntry) => void;
@@ -103,6 +105,7 @@ export const useStore = create<StoreState>()(
   persist(
     (set) => ({
       isOnboarded: false,
+      profilePhoto: '',
       userProfile: BLANK_PROFILE,
       dailyLog: {
         foods: [],
@@ -119,6 +122,7 @@ export const useStore = create<StoreState>()(
       activeSection: 'Dashboard',
       completeOnboarding: (profile) =>
         set({ isOnboarded: true, userProfile: profile }),
+      setProfilePhoto: (photo) => set({ profilePhoto: photo }),
       updateProfile: (profile) =>
         set((state) => ({ userProfile: { ...state.userProfile, ...profile } })),
       updateDailyLog: (log) =>
