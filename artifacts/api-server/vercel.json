@@ -1,0 +1,5 @@
+{
+  "framework": null,
+  "buildCommand": "pnpm -w run typecheck:libs && node ./build.mjs",
+  "outputDirectory": "dist"
+}
