@@ -1,41 +1,57 @@
 import { useStore } from "@/store/useStore";
-import { 
-  LayoutDashboard, 
-  Apple, 
-  Utensils, 
-  Dumbbell, 
-  FileText, 
-  TrendingUp, 
-  MessageSquare, 
-  Settings as SettingsIcon 
+import {
+  LayoutDashboard,
+  Apple,
+  Utensils,
+  Dumbbell,
+  FileText,
+  TrendingUp,
+  MessageSquare,
+  Settings as SettingsIcon,
+  X,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 const menuItems = [
-  { id: "Dashboard", icon: LayoutDashboard },
-  { id: "Nutrition", icon: Apple },
-  { id: "Diet Planner", icon: Utensils },
-  { id: "Workout Planner", icon: Dumbbell },
+  { id: "Dashboard",              icon: LayoutDashboard },
+  { id: "Nutrition",              icon: Apple },
+  { id: "Diet Planner",           icon: Utensils },
+  { id: "Workout Planner",        icon: Dumbbell },
   { id: "Health Report Analyzer", icon: FileText },
-  { id: "Progress Tracker", icon: TrendingUp },
-  { id: "AI Coach", icon: MessageSquare },
-  { id: "Settings", icon: SettingsIcon },
+  { id: "Progress Tracker",       icon: TrendingUp },
+  { id: "AI Coach",               icon: MessageSquare },
+  { id: "Settings",               icon: SettingsIcon },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  onNavClick: () => void;
+}
+
+export function Sidebar({ onNavClick }: SidebarProps) {
   const { activeSection, setActiveSection } = useStore();
 
   return (
-    <aside className="w-64 border-r border-border/40 bg-card/30 backdrop-blur-md h-full flex flex-col">
-      <div className="p-6 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center">
-          <TrendingUp className="w-5 h-5 text-primary-foreground" />
+    <aside className="w-64 border-r border-border/40 bg-card/80 md:bg-card/30 backdrop-blur-md h-full flex flex-col shrink-0">
+      {/* Logo + close button (close only shown on mobile via parent) */}
+      <div className="p-5 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center shrink-0">
+            <TrendingUp className="w-5 h-5 text-primary-foreground" />
+          </div>
+          <span className="font-bold text-lg tracking-tight">TermFit</span>
         </div>
-        <span className="font-bold text-lg tracking-tight">TermFit</span>
+        {/* Close button — shown on mobile only */}
+        <button
+          onClick={onNavClick}
+          className="md:hidden p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/10 transition-colors"
+          aria-label="Close menu"
+        >
+          <X className="w-5 h-5" />
+        </button>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
         {menuItems.map((item) => {
           const isActive = activeSection === item.id;
           const Icon = item.icon;
@@ -43,12 +59,15 @@ export function Sidebar() {
           return (
             <button
               key={item.id}
-              onClick={() => setActiveSection(item.id)}
-              data-testid={`sidebar-nav-${item.id.replace(/\s+/g, '-').toLowerCase()}`}
+              onClick={() => {
+                setActiveSection(item.id);
+                onNavClick();
+              }}
+              data-testid={`sidebar-nav-${item.id.replace(/\s+/g, "-").toLowerCase()}`}
               className={cn(
                 "w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 relative group",
-                isActive 
-                  ? "text-primary" 
+                isActive
+                  ? "text-primary"
                   : "text-muted-foreground hover:text-foreground hover:bg-accent/10"
               )}
             >
@@ -60,16 +79,16 @@ export function Sidebar() {
                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
                 />
               )}
-              <Icon className="w-5 h-5 relative z-10" />
+              <Icon className="w-5 h-5 relative z-10 shrink-0" />
               <span className="relative z-10">{item.id}</span>
             </button>
           );
         })}
       </nav>
-      
-      <div className="p-4 m-4 rounded-xl bg-card border border-border/50 text-xs text-muted-foreground">
+
+      <div className="p-4 m-3 rounded-xl bg-card border border-border/50 text-xs text-muted-foreground">
         <p className="font-medium text-foreground mb-1">PRO ACTIVE</p>
-        <p>Syncing data from Apple Health & MyFitnessPal.</p>
+        <p>Syncing data from Apple Health &amp; MyFitnessPal.</p>
       </div>
     </aside>
   );
