@@ -123,21 +123,22 @@ export function ProgressPhotos() {
                     key={photo.id}
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="group relative aspect-[3/4] rounded-xl overflow-hidden bg-muted border border-border cursor-pointer"
+                    className="group relative aspect-[3/4] rounded-xl bg-muted border border-border cursor-pointer isolate"
+                    style={{ overflow: "hidden" }}
                     onClick={() => setLightbox(photo)}
                   >
-                    <img src={photo.src} alt={`${photo.label} ${photo.date}`} className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-end p-2">
-                      <div className="flex items-center gap-1 text-white text-xs mb-1">
-                        <Calendar className="w-3 h-3" />
-                        {photo.date}
-                      </div>
+                    <img src={photo.src} alt={`${photo.label} ${photo.date}`} className="absolute inset-0 w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-end justify-between p-2 z-10">
                       <button
                         onClick={e => { e.stopPropagation(); removePhoto(photo.id); }}
-                        className="w-full flex items-center justify-center gap-1 py-1 rounded-lg bg-red-500/80 text-white text-xs hover:bg-red-500 transition-colors"
+                        className="flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-red-500 text-white text-xs hover:bg-red-600 transition-colors"
                       >
-                        <Trash2 className="w-3 h-3" /> Remove
+                        <Trash2 className="w-3 h-3" />
                       </button>
+                      <div className="flex items-center gap-1 text-white/80 text-xs w-full">
+                        <Calendar className="w-3 h-3 shrink-0" />
+                        <span className="truncate">{photo.date}</span>
+                      </div>
                     </div>
                   </motion.div>
                 ))}

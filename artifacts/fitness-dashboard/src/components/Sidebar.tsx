@@ -7,13 +7,11 @@ import {
   FileText,
   TrendingUp,
   MessageSquare,
-  Settings as SettingsIcon,
   X,
   ClipboardList,
   Home,
   Footprints,
   Ruler,
-  LogOut,
   Camera,
 } from "lucide-react";
 import { motion } from "framer-motion";
@@ -32,7 +30,6 @@ const menuItems = [
   { id: "Health Report Analyzer", icon: FileText },
   { id: "Progress Tracker",       icon: TrendingUp },
   { id: "AI Coach",               icon: MessageSquare },
-  { id: "Settings",               icon: SettingsIcon },
 ];
 
 interface SidebarProps {
@@ -40,7 +37,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onNavClick }: SidebarProps) {
-  const { activeSection, setActiveSection, userProfile, profilePhoto, username, logout } = useStore();
+  const { activeSection, setActiveSection, userProfile, profilePhoto, username } = useStore();
 
   const initials = userProfile.name
     .split(" ")
@@ -120,20 +117,13 @@ export function Sidebar({ onNavClick }: SidebarProps) {
         })}
       </nav>
 
-      <div className="px-3 pb-2 space-y-2">
+      <div className="px-3 pb-2">
         {username && (
           <div className="px-3 py-2 rounded-lg bg-card border border-border/50 text-xs text-muted-foreground flex items-center gap-2">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
             <span className="truncate">@{username}</span>
           </div>
         )}
-        <button
-          onClick={() => { logout(); onNavClick(); }}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-red-400 hover:bg-red-400/10 transition-colors group"
-        >
-          <LogOut className="w-4 h-4 shrink-0" />
-          <span>Sign Out</span>
-        </button>
       </div>
 
       <div className="px-4 pb-4 pt-1 text-center">
