@@ -12,6 +12,7 @@ import {
   ClipboardList,
   Home,
   Footprints,
+  Ruler,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -24,6 +25,7 @@ const menuItems = [
   { id: "Workout Logger",         icon: ClipboardList },
   { id: "Home Workout",           icon: Home },
   { id: "Daily Steps",            icon: Footprints },
+  { id: "Body Measurements",      icon: Ruler },
   { id: "Health Report Analyzer", icon: FileText },
   { id: "Progress Tracker",       icon: TrendingUp },
   { id: "AI Coach",               icon: MessageSquare },
@@ -35,7 +37,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onNavClick }: SidebarProps) {
-  const { activeSection, setActiveSection } = useStore();
+  const { activeSection, setActiveSection, userProfile } = useStore();
 
   return (
     <aside className="w-64 border-r border-border/40 bg-card/80 md:bg-card/30 backdrop-blur-md h-full flex flex-col shrink-0">
@@ -54,6 +56,20 @@ export function Sidebar({ onNavClick }: SidebarProps) {
           <X className="w-5 h-5" />
         </button>
       </div>
+
+      {userProfile.name && (
+        <div className="px-4 pb-3">
+          <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-primary/5 border border-primary/10">
+            <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm shrink-0">
+              {userProfile.name.charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold truncate">{userProfile.name}</p>
+              <p className="text-xs text-muted-foreground truncate">{userProfile.goal}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
         {menuItems.map((item) => {
@@ -91,8 +107,8 @@ export function Sidebar({ onNavClick }: SidebarProps) {
       </nav>
 
       <div className="px-3 pb-2">
-        <div className="p-4 rounded-xl bg-card border border-border/50 text-xs text-muted-foreground">
-          <p className="font-medium text-foreground mb-1">PRO ACTIVE</p>
+        <div className="p-3 rounded-xl bg-card border border-border/50 text-xs text-muted-foreground">
+          <p className="font-medium text-foreground mb-0.5">PRO ACTIVE</p>
           <p>Syncing data from Apple Health &amp; MyFitnessPal.</p>
         </div>
       </div>

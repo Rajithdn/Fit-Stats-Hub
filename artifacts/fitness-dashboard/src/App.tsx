@@ -6,14 +6,24 @@ import { WorkoutPlanner } from "@/components/sections/WorkoutPlanner";
 import { WorkoutLogger } from "@/components/sections/WorkoutLogger";
 import { HomeWorkout } from "@/components/sections/HomeWorkout";
 import { DailySteps } from "@/components/sections/DailySteps";
+import { BodyMeasurements } from "@/components/sections/BodyMeasurements";
 import { HealthReportAnalyzer } from "@/components/sections/HealthReportAnalyzer";
 import { ProgressTracker } from "@/components/sections/ProgressTracker";
 import { AICoach } from "@/components/sections/AICoach";
 import { Settings } from "@/components/sections/Settings";
 import { Layout } from "@/components/Layout";
+import { Onboarding } from "@/components/Onboarding";
 
 export default function App() {
-  const { activeSection, theme } = useStore();
+  const { activeSection, theme, isOnboarded } = useStore();
+
+  if (!isOnboarded) {
+    return (
+      <div className={`min-h-screen w-full bg-background text-foreground dark`}>
+        <Onboarding />
+      </div>
+    );
+  }
 
   const renderSection = () => {
     switch (activeSection) {
@@ -31,6 +41,8 @@ export default function App() {
         return <HomeWorkout />;
       case "Daily Steps":
         return <DailySteps />;
+      case "Body Measurements":
+        return <BodyMeasurements />;
       case "Health Report Analyzer":
         return <HealthReportAnalyzer />;
       case "Progress Tracker":

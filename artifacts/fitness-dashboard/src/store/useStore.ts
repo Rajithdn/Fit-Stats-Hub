@@ -39,6 +39,21 @@ export type StepEntry = {
   steps: number;
 };
 
+export type MeasurementEntry = {
+  id: string;
+  date: string;
+  chest: number;
+  waist: number;
+  hips: number;
+  leftArm: number;
+  rightArm: number;
+  leftThigh: number;
+  rightThigh: number;
+  shoulders: number;
+  neck: number;
+  notes: string;
+};
+
 export type DailyLog = {
   foods: FoodEntry[];
   workouts: any[];
@@ -47,14 +62,17 @@ export type DailyLog = {
 };
 
 type StoreState = {
+  isOnboarded: boolean;
   userProfile: UserProfile;
   dailyLog: DailyLog;
   progressEntries: any[];
   workoutLogs: WorkoutLogEntry[];
   stepEntries: StepEntry[];
   stepGoal: number;
+  measurements: MeasurementEntry[];
   theme: 'dark' | 'light';
   activeSection: string;
+  completeOnboarding: (profile: UserProfile) => void;
   updateProfile: (profile: Partial<UserProfile>) => void;
   updateDailyLog: (log: Partial<DailyLog>) => void;
   addFoodToLog: (food: FoodEntry) => void;
@@ -63,39 +81,44 @@ type StoreState = {
   removeWorkoutLog: (id: string) => void;
   updateStepEntry: (date: string, steps: number) => void;
   setStepGoal: (goal: number) => void;
+  addMeasurement: (entry: MeasurementEntry) => void;
+  removeMeasurement: (id: string) => void;
   setTheme: (theme: 'dark' | 'light') => void;
   setActiveSection: (section: string) => void;
+};
+
+const BLANK_PROFILE: UserProfile = {
+  name: '',
+  age: 25,
+  gender: 'male',
+  height: 170,
+  weight: 70,
+  targetWeight: 65,
+  activityLevel: 'Moderately Active',
+  goal: 'Weight Loss',
+  dailyCalorieGoal: 2000,
 };
 
 export const useStore = create<StoreState>()(
   persist(
     (set) => ({
-      userProfile: {
-        name: 'Alex',
-        age: 28,
-        gender: 'male',
-        height: 180,
-        weight: 85,
-        targetWeight: 78,
-        activityLevel: 'Moderately Active',
-        goal: 'Weight Loss',
-        dailyCalorieGoal: 2200,
-      },
+      isOnboarded: false,
+      userProfile: BLANK_PROFILE,
       dailyLog: {
-        foods: [
-          { id: '1', name: 'Oatmeal', calories: 150, protein: 5, carbs: 27, fat: 3, fiber: 4 },
-          { id: '2', name: 'Chicken Breast', calories: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0 },
-        ],
+        foods: [],
         workouts: [],
-        water: 1.5,
-        sleep: 7.5,
+        water: 0,
+        sleep: 0,
       },
       progressEntries: [],
       workoutLogs: [],
       stepEntries: [],
       stepGoal: 10000,
+      measurements: [],
       theme: 'dark',
       activeSection: 'Dashboard',
+      completeOnboarding: (profile) =>
+        set({ isOnboarded: true, userProfile: profile }),
       updateProfile: (profile) =>
         set((state) => ({ userProfile: { ...state.userProfile, ...profile } })),
       updateDailyLog: (log) =>
@@ -126,6 +149,10 @@ export const useStore = create<StoreState>()(
           return { stepEntries: [{ date, steps }, ...state.stepEntries] };
         }),
       setStepGoal: (goal) => set({ stepGoal: goal }),
+      addMeasurement: (entry) =>
+        set((state) => ({ measurements: [entry, ...state.measurements] })),
+      removeMeasurement: (id) =>
+        set((state) => ({ measurements: state.measurements.filter((m) => m.id !== id) })),
       setTheme: (theme) => set({ theme }),
       setActiveSection: (section) => set({ activeSection: section }),
     }),
