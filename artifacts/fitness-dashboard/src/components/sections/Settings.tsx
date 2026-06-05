@@ -8,7 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { UserProfile } from "@/store/useStore";
-import { User, Target, Settings2, Camera, Trash2, ShieldCheck, Eye, EyeOff, Loader2, Database, RefreshCw, CheckCircle2 } from "lucide-react";
+import { User, Target, Settings2, Camera, Trash2, ShieldCheck, Eye, EyeOff, Loader2, CheckCircle2 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
 export function Settings() {
@@ -376,44 +376,6 @@ export function Settings() {
               </Button>
             </div>
           </form>
-        </CardContent>
-      </Card>
-
-      {/* Data Storage Info */}
-      <Card className="bg-card/50 backdrop-blur-sm border-border/50">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Database className="w-5 h-5 text-primary" /> Data Storage
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm">
-          <div className="flex gap-3 p-3 rounded-lg bg-background/50 border border-border/40">
-            <Database className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-            <div>
-              <p className="font-medium">PostgreSQL Database (Replit)</p>
-              <p className="text-muted-foreground text-xs mt-0.5">
-                All your fitness data — profile, workouts, steps, meals, measurements, and photo — is securely stored in a PostgreSQL database tied to your account. Data is available on any device after logging in.
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-3 p-3 rounded-lg bg-background/50 border border-border/40">
-            <RefreshCw className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
-            <div>
-              <p className="font-medium">Cross-device sync</p>
-              <p className="text-muted-foreground text-xs mt-0.5">
-                Log in with your username and password from any browser or device to access your data. Your session stays active for 30 days.
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-3 p-3 rounded-lg bg-background/50 border border-border/40">
-            <ShieldCheck className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
-            <div>
-              <p className="font-medium">Secure & private</p>
-              <p className="text-muted-foreground text-xs mt-0.5">
-                Passwords are hashed with bcrypt — they are never stored in plain text. Your auth token lives only in your browser's localStorage.
-              </p>
-            </div>
-          </div>
         </CardContent>
       </Card>
 

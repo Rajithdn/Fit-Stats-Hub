@@ -24,29 +24,58 @@ interface AuthResponse {
   userId: number;
 }
 
-const GOALS = ['Weight Loss', 'Muscle Gain', 'Maintain Weight', 'Improve Fitness', 'Increase Strength'];
+const GOALS = ['Weight Loss', 'Maintenance', 'Lean Bulk', 'Weight Gain'];
 const GENDERS = ['male', 'female', 'other'];
+const ACTIVITY_LEVELS = [
+  { value: 'Sedentary', label: 'Sedentary', sub: 'desk job, no exercise' },
+  { value: 'Lightly Active', label: 'Lightly Active', sub: '1–3 days/week' },
+  { value: 'Moderately Active', label: 'Moderately Active', sub: '3–5 days/week' },
+  { value: 'Very Active', label: 'Very Active', sub: '6–7 days/week' },
+  { value: 'Super Active', label: 'Super Active', sub: 'athlete / physical job' },
+];
+
+function StepDots({ current, total }: { current: number; total: number }) {
+  return (
+    <div className="flex gap-1.5 items-center">
+      {Array.from({ length: total }).map((_, i) => (
+        <div
+          key={i}
+          className={`h-1.5 rounded-full transition-all duration-300 ${
+            i < current ? 'w-6 bg-emerald-500' : 'w-3 bg-gray-700'
+          }`}
+        />
+      ))}
+    </div>
+  );
+}
 
 export function Auth() {
   const [tab, setTab] = useState<Tab>('login');
 
-  // Login fields
+  // Login
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
-  // Register step 1
+  // Register step 1 — account
   const [regUsername, setRegUsername] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [showRegPw, setShowRegPw] = useState(false);
 
-  // Register step 2
+  // Register step 2 — personal
+  const [name, setName] = useState('');
   const [age, setAge] = useState('');
   const [gender, setGender] = useState('male');
+
+  // Register step 3 — fitness
+  const [height, setHeight] = useState('');
+  const [weight, setWeight] = useState('');
+  const [targetWeight, setTargetWeight] = useState('');
+  const [activityLevel, setActivityLevel] = useState('Moderately Active');
   const [goal, setGoal] = useState('Weight Loss');
 
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { login, loadUserData } = useStore();
@@ -86,14 +115,24 @@ export function Auth() {
     setStep(2);
   }
 
-  async function handleStep2Submit(e: React.FormEvent) {
+  function handleStep2Next(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    if (!name.trim()) { setError('Enter your name'); return; }
     const parsedAge = parseInt(age);
     if (!age || isNaN(parsedAge) || parsedAge < 10 || parsedAge > 120) {
-      setError('Enter a valid age (10–120)');
-      return;
+      setError('Enter a valid age (10–120)'); return;
     }
+    setStep(3);
+  }
+
+  async function handleStep3Submit(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    const h = parseFloat(height), w = parseFloat(weight), tw = parseFloat(targetWeight);
+    if (!height || isNaN(h) || h < 100 || h > 250) { setError('Enter a valid height (100–250 cm)'); return; }
+    if (!weight || isNaN(w) || w < 30 || w > 300) { setError('Enter a valid weight (30–300 kg)'); return; }
+    if (!targetWeight || isNaN(tw) || tw < 30 || tw > 300) { setError('Enter a valid target weight'); return; }
     setLoading(true);
     try {
       const data = await apiFetch<AuthResponse>('/api/auth/register', {
@@ -101,8 +140,13 @@ export function Auth() {
         body: JSON.stringify({
           username: regUsername.trim(),
           password: regPassword,
-          age: parsedAge,
+          name: name.trim(),
+          age: parseInt(age),
           gender,
+          height: h,
+          weight: w,
+          targetWeight: tw,
+          activityLevel,
           goal,
         }),
       });
@@ -118,8 +162,14 @@ export function Auth() {
     }
   }
 
+  const slideVariants = {
+    enter: (dir: number) => ({ opacity: 0, x: dir > 0 ? 30 : -30 }),
+    center: { opacity: 1, x: 0 },
+    exit: (dir: number) => ({ opacity: 0, x: dir > 0 ? -30 : 30 }),
+  };
+
   return (
-    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-gray-950 px-4">
+    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-gray-950 px-4 py-8">
       <motion.div
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
@@ -141,9 +191,7 @@ export function Auth() {
                 key={t}
                 onClick={() => switchTab(t)}
                 className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 ${
-                  tab === t
-                    ? 'bg-emerald-500 text-white shadow-sm'
-                    : 'text-gray-400 hover:text-white'
+                  tab === t ? 'bg-emerald-500 text-white shadow-sm' : 'text-gray-400 hover:text-white'
                 }`}
               >
                 {t === 'login' ? <LogIn className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
@@ -152,13 +200,15 @@ export function Auth() {
             ))}
           </div>
 
-          <AnimatePresence mode="wait">
+          <AnimatePresence mode="wait" custom={1}>
             {tab === 'login' ? (
               <motion.form
                 key="login"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
+                custom={-1}
+                variants={slideVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
                 transition={{ duration: 0.2 }}
                 onSubmit={handleLogin}
                 className="space-y-4"
@@ -177,7 +227,6 @@ export function Auth() {
                     />
                   </div>
                 </div>
-
                 <div>
                   <label className="text-gray-300 text-sm font-medium block mb-1.5">Password</label>
                   <div className="relative">
@@ -190,222 +239,149 @@ export function Auth() {
                       autoComplete="current-password"
                       className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-10 pr-11 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors text-sm"
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowPw((p) => !p)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
-                    >
+                    <button type="button" onClick={() => setShowPw(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors">
                       {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
-
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setRememberMe((v) => !v)}
-                    className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-200 flex-shrink-0 ${
-                      rememberMe
-                        ? 'bg-emerald-500 border-emerald-500'
-                        : 'border-gray-600 bg-transparent'
-                    }`}
+                  <button type="button" onClick={() => setRememberMe(v => !v)}
+                    className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all flex-shrink-0 ${rememberMe ? 'bg-emerald-500 border-emerald-500' : 'border-gray-600 bg-transparent'}`}
                   >
-                    {rememberMe && (
-                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
-                    )}
+                    {rememberMe && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                   </button>
-                  <span className="text-gray-400 text-sm select-none cursor-pointer" onClick={() => setRememberMe((v) => !v)}>
-                    Remember me
-                  </span>
+                  <span className="text-gray-400 text-sm cursor-pointer select-none" onClick={() => setRememberMe(v => !v)}>Remember me</span>
                 </div>
-
-                {error && (
-                  <motion.p
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2"
-                  >
-                    {error}
-                  </motion.p>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-2 mt-2"
-                >
+                {error && <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">{error}</motion.p>}
+                <button type="submit" disabled={loading} className="w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 mt-2">
                   {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <><LogIn className="w-4 h-4" /> Sign In</>}
                 </button>
               </motion.form>
-            ) : step === 1 ? (
-              <motion.form
-                key="register-step1"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.2 }}
-                onSubmit={handleStep1Next}
-                className="space-y-4"
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-gray-400 text-xs">Step 1 of 2 — Account details</p>
-                  <div className="flex gap-1">
-                    <div className="w-6 h-1.5 rounded-full bg-emerald-500" />
-                    <div className="w-6 h-1.5 rounded-full bg-gray-700" />
-                  </div>
-                </div>
 
+            ) : step === 1 ? (
+              <motion.form key="reg-1" custom={1} variants={slideVariants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.2 }} onSubmit={handleStep1Next} className="space-y-4">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-gray-400 text-xs">Step 1 of 3 — Account</p>
+                  <StepDots current={1} total={3} />
+                </div>
                 <div>
                   <label className="text-gray-300 text-sm font-medium block mb-1.5">Username</label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                    <input
-                      type="text"
-                      value={regUsername}
-                      onChange={(e) => setRegUsername(e.target.value)}
-                      placeholder="your_username"
-                      autoComplete="username"
-                      className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-10 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors text-sm"
-                    />
+                    <input type="text" value={regUsername} onChange={e => setRegUsername(e.target.value)} placeholder="choose_a_username" autoComplete="username"
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-10 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors text-sm" />
                   </div>
                 </div>
-
                 <div>
                   <label className="text-gray-300 text-sm font-medium block mb-1.5">Password</label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                    <input
-                      type={showRegPw ? 'text' : 'password'}
-                      value={regPassword}
-                      onChange={(e) => setRegPassword(e.target.value)}
-                      placeholder="••••••••"
-                      autoComplete="new-password"
-                      className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-10 pr-11 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors text-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowRegPw((p) => !p)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
-                    >
+                    <input type={showRegPw ? 'text' : 'password'} value={regPassword} onChange={e => setRegPassword(e.target.value)} placeholder="min 4 characters" autoComplete="new-password"
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-10 pr-11 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors text-sm" />
+                    <button type="button" onClick={() => setShowRegPw(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors">
                       {showRegPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
-                  <p className="text-gray-500 text-xs mt-1">Minimum 4 characters</p>
                 </div>
-
-                {error && (
-                  <motion.p
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2"
-                  >
-                    {error}
-                  </motion.p>
-                )}
-
-                <button
-                  type="submit"
-                  className="w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 transition-all duration-200 flex items-center justify-center gap-2 mt-2"
-                >
+                {error && <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">{error}</motion.p>}
+                <button type="submit" className="w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 transition-all flex items-center justify-center gap-2 mt-2">
                   Next <ChevronRight className="w-4 h-4" />
                 </button>
               </motion.form>
-            ) : (
-              <motion.form
-                key="register-step2"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                transition={{ duration: 0.2 }}
-                onSubmit={handleStep2Submit}
-                className="space-y-4"
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-gray-400 text-xs">Step 2 of 2 — Your profile</p>
-                  <div className="flex gap-1">
-                    <div className="w-6 h-1.5 rounded-full bg-emerald-500" />
-                    <div className="w-6 h-1.5 rounded-full bg-emerald-500" />
-                  </div>
-                </div>
 
+            ) : step === 2 ? (
+              <motion.form key="reg-2" custom={1} variants={slideVariants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.2 }} onSubmit={handleStep2Next} className="space-y-4">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-gray-400 text-xs">Step 2 of 3 — Personal Info</p>
+                  <StepDots current={2} total={3} />
+                </div>
+                <div>
+                  <label className="text-gray-300 text-sm font-medium block mb-1.5">Full Name</label>
+                  <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Your full name"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors text-sm" />
+                </div>
                 <div>
                   <label className="text-gray-300 text-sm font-medium block mb-1.5">Age</label>
-                  <input
-                    type="number"
-                    value={age}
-                    onChange={(e) => setAge(e.target.value)}
-                    placeholder="e.g. 25"
-                    min={10}
-                    max={120}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors text-sm"
-                  />
+                  <input type="number" value={age} onChange={e => setAge(e.target.value)} placeholder="e.g. 25" min={10} max={120}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors text-sm" />
                 </div>
-
                 <div>
                   <label className="text-gray-300 text-sm font-medium block mb-1.5">Gender</label>
                   <div className="grid grid-cols-3 gap-2">
-                    {GENDERS.map((g) => (
-                      <button
-                        key={g}
-                        type="button"
-                        onClick={() => setGender(g)}
-                        className={`py-2.5 rounded-xl text-sm font-medium capitalize transition-all duration-200 ${
-                          gender === g
-                            ? 'bg-emerald-500 text-white'
-                            : 'bg-gray-800 border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600'
-                        }`}
-                      >
+                    {GENDERS.map(g => (
+                      <button key={g} type="button" onClick={() => setGender(g)}
+                        className={`py-2.5 rounded-xl text-sm font-medium capitalize transition-all ${gender === g ? 'bg-emerald-500 text-white' : 'bg-gray-800 border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600'}`}>
                         {g}
                       </button>
                     ))}
                   </div>
                 </div>
-
-                <div>
-                  <label className="text-gray-300 text-sm font-medium block mb-1.5">Fitness Goal</label>
-                  <div className="space-y-2">
-                    {GOALS.map((g) => (
-                      <button
-                        key={g}
-                        type="button"
-                        onClick={() => setGoal(g)}
-                        className={`w-full py-2.5 px-4 rounded-xl text-sm font-medium text-left transition-all duration-200 ${
-                          goal === g
-                            ? 'bg-emerald-500/20 border border-emerald-500 text-emerald-400'
-                            : 'bg-gray-800 border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600'
-                        }`}
-                      >
-                        {g}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {error && (
-                  <motion.p
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2"
-                  >
-                    {error}
-                  </motion.p>
-                )}
-
+                {error && <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">{error}</motion.p>}
                 <div className="flex gap-3 mt-2">
-                  <button
-                    type="button"
-                    onClick={() => { setStep(1); setError(''); }}
-                    className="flex-1 py-3 rounded-xl font-semibold text-gray-300 bg-gray-800 border border-gray-700 hover:bg-gray-700 transition-all duration-200 flex items-center justify-center gap-2"
-                  >
+                  <button type="button" onClick={() => { setStep(1); setError(''); }}
+                    className="flex-1 py-3 rounded-xl font-semibold text-gray-300 bg-gray-800 border border-gray-700 hover:bg-gray-700 transition-all flex items-center justify-center gap-2">
                     <ChevronLeft className="w-4 h-4" /> Back
                   </button>
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="flex-1 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-2"
-                  >
+                  <button type="submit" className="flex-1 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 transition-all flex items-center justify-center gap-2">
+                    Next <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </motion.form>
+
+            ) : (
+              <motion.form key="reg-3" custom={1} variants={slideVariants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.2 }} onSubmit={handleStep3Submit} className="space-y-4">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-gray-400 text-xs">Step 3 of 3 — Fitness Info</p>
+                  <StepDots current={3} total={3} />
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-gray-300 text-xs font-medium block mb-1.5">Height (cm)</label>
+                    <input type="number" value={height} onChange={e => setHeight(e.target.value)} placeholder="170" min={100} max={250}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-gray-300 text-xs font-medium block mb-1.5">Weight (kg)</label>
+                    <input type="number" value={weight} onChange={e => setWeight(e.target.value)} placeholder="70" min={30} max={300} step={0.1}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-gray-300 text-xs font-medium block mb-1.5">Target (kg)</label>
+                    <input type="number" value={targetWeight} onChange={e => setTargetWeight(e.target.value)} placeholder="65" min={30} max={300} step={0.1}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-gray-300 text-sm font-medium block mb-1.5">Activity Level</label>
+                  <div className="space-y-1.5">
+                    {ACTIVITY_LEVELS.map(a => (
+                      <button key={a.value} type="button" onClick={() => setActivityLevel(a.value)}
+                        className={`w-full py-2 px-3 rounded-xl text-sm text-left transition-all flex items-center justify-between ${activityLevel === a.value ? 'bg-emerald-500/20 border border-emerald-500 text-emerald-400' : 'bg-gray-800 border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600'}`}>
+                        <span className="font-medium">{a.label}</span>
+                        <span className="text-xs opacity-70">{a.sub}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-gray-300 text-sm font-medium block mb-1.5">Goal</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {GOALS.map(g => (
+                      <button key={g} type="button" onClick={() => setGoal(g)}
+                        className={`py-2.5 px-3 rounded-xl text-sm font-medium text-center transition-all ${goal === g ? 'bg-emerald-500/20 border border-emerald-500 text-emerald-400' : 'bg-gray-800 border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600'}`}>
+                        {g}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {error && <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">{error}</motion.p>}
+                <div className="flex gap-3 mt-2">
+                  <button type="button" onClick={() => { setStep(2); setError(''); }}
+                    className="flex-1 py-3 rounded-xl font-semibold text-gray-300 bg-gray-800 border border-gray-700 hover:bg-gray-700 transition-all flex items-center justify-center gap-2">
+                    <ChevronLeft className="w-4 h-4" /> Back
+                  </button>
+                  <button type="submit" disabled={loading}
+                    className="flex-1 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2">
                     {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <><UserPlus className="w-4 h-4" /> Create Account</>}
                   </button>
                 </div>
@@ -415,18 +391,13 @@ export function Auth() {
 
           <p className="text-center text-gray-500 text-xs mt-6">
             {tab === 'login' ? "Don't have an account? " : 'Already have an account? '}
-            <button
-              onClick={() => switchTab(tab === 'login' ? 'register' : 'login')}
-              className="text-emerald-400 hover:text-emerald-300 font-medium transition-colors"
-            >
+            <button onClick={() => switchTab(tab === 'login' ? 'register' : 'login')} className="text-emerald-400 hover:text-emerald-300 font-medium transition-colors">
               {tab === 'login' ? 'Register here' : 'Sign in'}
             </button>
           </p>
         </div>
 
-        <p className="text-center text-gray-600 text-xs mt-6">
-          Developed by Rajith
-        </p>
+        <p className="text-center text-gray-600 text-xs mt-6">Developed by Rajith</p>
       </motion.div>
     </div>
   );

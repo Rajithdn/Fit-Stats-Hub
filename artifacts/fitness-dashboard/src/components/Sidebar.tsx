@@ -65,26 +65,24 @@ export function Sidebar({ onNavClick }: SidebarProps) {
         </button>
       </div>
 
-      {userProfile.name && (
-        <div className="px-4 pb-3">
-          <button
-            onClick={() => { setActiveSection("Settings"); onNavClick(); }}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg bg-primary/5 border border-primary/10 hover:bg-primary/10 transition-colors group"
-          >
-            <div className="w-8 h-8 rounded-full border border-border overflow-hidden bg-primary/20 flex items-center justify-center shrink-0">
-              {profilePhoto ? (
-                <img src={profilePhoto} alt="Profile" className="w-full h-full object-cover" />
-              ) : (
-                <span className="text-xs font-bold text-primary">{initials || "?"}</span>
-              )}
-            </div>
-            <div className="min-w-0 text-left">
-              <p className="text-sm font-semibold truncate">{userProfile.name}</p>
-              <p className="text-xs text-muted-foreground truncate">{userProfile.goal}</p>
-            </div>
-          </button>
-        </div>
-      )}
+      <div className="px-4 pb-3">
+        <button
+          onClick={() => { setActiveSection("Settings"); onNavClick(); }}
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg bg-primary/5 border border-primary/10 hover:bg-primary/10 transition-colors group"
+        >
+          <div className="w-10 h-10 rounded-full border-2 border-primary/30 overflow-hidden bg-primary/20 flex items-center justify-center shrink-0">
+            {profilePhoto ? (
+              <img src={profilePhoto} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-sm font-bold text-primary">{initials || username?.[0]?.toUpperCase() || "?"}</span>
+            )}
+          </div>
+          <div className="min-w-0 text-left">
+            <p className="text-sm font-semibold truncate">{userProfile.name || `@${username}`}</p>
+            <p className="text-xs text-muted-foreground truncate">{userProfile.goal || "Set up your profile"}</p>
+          </div>
+        </button>
+      </div>
 
       <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
         {menuItems.map((item) => {
