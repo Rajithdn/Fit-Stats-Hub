@@ -23,6 +23,22 @@ export type FoodEntry = {
   fiber: number;
 };
 
+export type WorkoutLogEntry = {
+  id: string;
+  date: string;
+  exercise: string;
+  sets: number;
+  reps: number;
+  weight: number;
+  unit: 'kg' | 'lbs';
+  notes: string;
+};
+
+export type StepEntry = {
+  date: string;
+  steps: number;
+};
+
 export type DailyLog = {
   foods: FoodEntry[];
   workouts: any[];
@@ -34,12 +50,19 @@ type StoreState = {
   userProfile: UserProfile;
   dailyLog: DailyLog;
   progressEntries: any[];
+  workoutLogs: WorkoutLogEntry[];
+  stepEntries: StepEntry[];
+  stepGoal: number;
   theme: 'dark' | 'light';
   activeSection: string;
   updateProfile: (profile: Partial<UserProfile>) => void;
   updateDailyLog: (log: Partial<DailyLog>) => void;
   addFoodToLog: (food: FoodEntry) => void;
   removeFoodFromLog: (id: string) => void;
+  addWorkoutLog: (entry: WorkoutLogEntry) => void;
+  removeWorkoutLog: (id: string) => void;
+  updateStepEntry: (date: string, steps: number) => void;
+  setStepGoal: (goal: number) => void;
   setTheme: (theme: 'dark' | 'light') => void;
   setActiveSection: (section: string) => void;
 };
@@ -68,6 +91,9 @@ export const useStore = create<StoreState>()(
         sleep: 7.5,
       },
       progressEntries: [],
+      workoutLogs: [],
+      stepEntries: [],
+      stepGoal: 10000,
       theme: 'dark',
       activeSection: 'Dashboard',
       updateProfile: (profile) =>
@@ -85,6 +111,21 @@ export const useStore = create<StoreState>()(
             foods: state.dailyLog.foods.filter((f) => f.id !== id),
           },
         })),
+      addWorkoutLog: (entry) =>
+        set((state) => ({ workoutLogs: [entry, ...state.workoutLogs] })),
+      removeWorkoutLog: (id) =>
+        set((state) => ({ workoutLogs: state.workoutLogs.filter((e) => e.id !== id) })),
+      updateStepEntry: (date, steps) =>
+        set((state) => {
+          const existing = state.stepEntries.findIndex((e) => e.date === date);
+          if (existing >= 0) {
+            const updated = [...state.stepEntries];
+            updated[existing] = { date, steps };
+            return { stepEntries: updated };
+          }
+          return { stepEntries: [{ date, steps }, ...state.stepEntries] };
+        }),
+      setStepGoal: (goal) => set({ stepGoal: goal }),
       setTheme: (theme) => set({ theme }),
       setActiveSection: (section) => set({ activeSection: section }),
     }),

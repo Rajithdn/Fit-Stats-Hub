@@ -9,6 +9,9 @@ import {
   MessageSquare,
   Settings as SettingsIcon,
   X,
+  ClipboardList,
+  Home,
+  Footprints,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -18,6 +21,9 @@ const menuItems = [
   { id: "Nutrition",              icon: Apple },
   { id: "Diet Planner",           icon: Utensils },
   { id: "Workout Planner",        icon: Dumbbell },
+  { id: "Workout Logger",         icon: ClipboardList },
+  { id: "Home Workout",           icon: Home },
+  { id: "Daily Steps",            icon: Footprints },
   { id: "Health Report Analyzer", icon: FileText },
   { id: "Progress Tracker",       icon: TrendingUp },
   { id: "AI Coach",               icon: MessageSquare },
@@ -33,7 +39,6 @@ export function Sidebar({ onNavClick }: SidebarProps) {
 
   return (
     <aside className="w-64 border-r border-border/40 bg-card/80 md:bg-card/30 backdrop-blur-md h-full flex flex-col shrink-0">
-      {/* Logo + close button (close only shown on mobile via parent) */}
       <div className="p-5 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center shrink-0">
@@ -41,7 +46,6 @@ export function Sidebar({ onNavClick }: SidebarProps) {
           </div>
           <span className="font-bold text-lg tracking-tight">TermFit</span>
         </div>
-        {/* Close button — shown on mobile only */}
         <button
           onClick={onNavClick}
           className="md:hidden p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/10 transition-colors"
@@ -86,9 +90,18 @@ export function Sidebar({ onNavClick }: SidebarProps) {
         })}
       </nav>
 
-      <div className="p-4 m-3 rounded-xl bg-card border border-border/50 text-xs text-muted-foreground">
-        <p className="font-medium text-foreground mb-1">PRO ACTIVE</p>
-        <p>Syncing data from Apple Health &amp; MyFitnessPal.</p>
+      <div className="px-3 pb-2">
+        <div className="p-4 rounded-xl bg-card border border-border/50 text-xs text-muted-foreground">
+          <p className="font-medium text-foreground mb-1">PRO ACTIVE</p>
+          <p>Syncing data from Apple Health &amp; MyFitnessPal.</p>
+        </div>
+      </div>
+
+      <div className="px-4 pb-4 pt-1 text-center">
+        <p className="text-[10px] text-muted-foreground/50">
+          Developed by{" "}
+          <span className="text-primary/70 font-semibold">Rajith</span>
+        </p>
       </div>
     </aside>
   );

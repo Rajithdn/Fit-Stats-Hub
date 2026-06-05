@@ -3,6 +3,9 @@ import { Dashboard } from "@/components/sections/Dashboard";
 import { Nutrition } from "@/components/sections/Nutrition";
 import { DietPlanner } from "@/components/sections/DietPlanner";
 import { WorkoutPlanner } from "@/components/sections/WorkoutPlanner";
+import { WorkoutLogger } from "@/components/sections/WorkoutLogger";
+import { HomeWorkout } from "@/components/sections/HomeWorkout";
+import { DailySteps } from "@/components/sections/DailySteps";
 import { HealthReportAnalyzer } from "@/components/sections/HealthReportAnalyzer";
 import { ProgressTracker } from "@/components/sections/ProgressTracker";
 import { AICoach } from "@/components/sections/AICoach";
@@ -22,6 +25,12 @@ export default function App() {
         return <DietPlanner />;
       case "Workout Planner":
         return <WorkoutPlanner />;
+      case "Workout Logger":
+        return <WorkoutLogger />;
+      case "Home Workout":
+        return <HomeWorkout />;
+      case "Daily Steps":
+        return <DailySteps />;
       case "Health Report Analyzer":
         return <HealthReportAnalyzer />;
       case "Progress Tracker":
