@@ -1,12 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-} from 'firebase/auth';
-import { auth } from '@/lib/firebase';
-import { setProfile } from '@/lib/firebaseDb';
-import { Dumbbell, Mail, Lock, Eye, EyeOff, Loader2, UserPlus, LogIn, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Dumbbell, User, Lock, Eye, EyeOff, Loader2, UserPlus, LogIn, ChevronRight, ChevronLeft } from 'lucide-react';
+import { useStore, TOKEN_KEY, fetchAndLoadUserData } from '@/store/useStore';
 
 const GOALS = ['Weight Loss', 'Maintenance', 'Lean Bulk', 'Weight Gain'];
 const GENDERS = ['male', 'female', 'other'];
@@ -36,15 +31,16 @@ function StepDots({ current, total }: { current: number; total: number }) {
 }
 
 export function Auth() {
+  const { login, loadUserData, setLoading: setGlobalLoading } = useStore();
   const [tab, setTab] = useState<Tab>('login');
 
   // Login
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
 
   // Register step 1 — account
-  const [regEmail, setRegEmail] = useState('');
+  const [regUsername, setRegUsername] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [showRegPw, setShowRegPw] = useState(false);
 
@@ -63,6 +59,7 @@ export function Auth() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
 
   function switchTab(t: Tab) {
     setTab(t);
@@ -70,35 +67,45 @@ export function Auth() {
     setStep(1);
   }
 
-  function friendlyError(code: string) {
-    if (code.includes('user-not-found') || code.includes('wrong-password') || code.includes('invalid-credential'))
-      return 'Invalid email or password';
-    if (code.includes('email-already-in-use')) return 'Email already registered';
-    if (code.includes('invalid-email')) return 'Invalid email address';
-    if (code.includes('weak-password')) return 'Password must be at least 6 characters';
-    if (code.includes('too-many-requests')) return 'Too many attempts — try again later';
-    return 'Something went wrong. Try again.';
+  function storeToken(token: string) {
+    if (rememberMe) {
+      localStorage.setItem(TOKEN_KEY, token);
+    } else {
+      sessionStorage.setItem(TOKEN_KEY, token);
+    }
   }
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setError('');
-    if (!email.trim() || !password) { setError('Enter email and password'); return; }
+    if (!username.trim() || !password) { setError('Enter username and password'); return; }
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
-      // onAuthStateChanged in App.tsx handles the rest
-    } catch (err: any) {
-      setError(friendlyError(err.code ?? ''));
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username.trim(), password }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? 'Invalid username or password'); return; }
+
+      storeToken(data.token);
+      login(String(data.userId), data.username);
+      setGlobalLoading(true);
+      const userData = await fetchAndLoadUserData();
+      loadUserData(userData);
+    } catch {
+      setError('Network error — please try again');
     } finally {
       setLoading(false);
+      setGlobalLoading(false);
     }
   }
 
   function handleStep1Next(e: React.FormEvent) {
     e.preventDefault();
     setError('');
-    if (!regEmail.trim() || !regEmail.includes('@')) { setError('Enter a valid email'); return; }
+    if (!regUsername.trim() || regUsername.trim().length < 3) { setError('Username must be at least 3 characters'); return; }
     if (!regPassword || regPassword.length < 6) { setError('Password must be at least 6 characters'); return; }
     setStep(2);
   }
@@ -123,27 +130,40 @@ export function Auth() {
     if (!targetWeight || isNaN(tw) || tw < 30 || tw > 300) { setError('Enter a valid target weight'); return; }
     setLoading(true);
     try {
-      const cred = await createUserWithEmailAndPassword(auth, regEmail.trim(), regPassword);
-      await setProfile(cred.user.uid, {
-        name: name.trim(),
-        age: parseInt(age),
-        gender,
-        height: h,
-        weight: w,
-        targetWeight: tw,
-        activityLevel,
-        goal,
-        dailyCalorieGoal: 2000,
-        stepGoal: 10000,
-        theme: 'dark',
-        profilePhoto: '',
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: regUsername.trim(),
+          password: regPassword,
+          name: name.trim(),
+          age: parseInt(age),
+          gender,
+          height: h,
+          weight: w,
+          targetWeight: tw,
+          activityLevel,
+          goal,
+          dailyCalorieGoal: 2000,
+          stepGoal: 10000,
+          theme: 'dark',
+          profilePhoto: '',
+        }),
       });
-      // onAuthStateChanged in App.tsx handles navigation
-    } catch (err: any) {
-      setError(friendlyError(err.code ?? ''));
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? 'Registration failed'); setStep(1); return; }
+
+      storeToken(data.token);
+      login(String(data.userId), data.username);
+      setGlobalLoading(true);
+      const userData = await fetchAndLoadUserData();
+      loadUserData(userData);
+    } catch {
+      setError('Network error — please try again');
       setStep(1);
     } finally {
       setLoading(false);
+      setGlobalLoading(false);
     }
   }
 
@@ -201,11 +221,11 @@ export function Auth() {
                 className="space-y-4"
               >
                 <div>
-                  <label className="text-gray-300 text-sm font-medium block mb-1.5">Email</label>
+                  <label className="text-gray-300 text-sm font-medium block mb-1.5">Username</label>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                      placeholder="you@example.com" autoComplete="email"
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                    <input type="text" value={username} onChange={(e) => setUsername(e.target.value)}
+                      placeholder="your_username" autoComplete="username"
                       className={`${inputCls} pl-10 pr-4`} />
                   </div>
                 </div>
@@ -222,6 +242,11 @@ export function Auth() {
                     </button>
                   </div>
                 </div>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)}
+                    className="rounded border-gray-600 bg-gray-800 text-emerald-500 focus:ring-emerald-500" />
+                  <span className="text-gray-400 text-sm">Remember me</span>
+                </label>
                 {error && (
                   <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                     className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
@@ -243,11 +268,11 @@ export function Auth() {
                   <StepDots current={1} total={3} />
                 </div>
                 <div>
-                  <label className="text-gray-300 text-sm font-medium block mb-1.5">Email</label>
+                  <label className="text-gray-300 text-sm font-medium block mb-1.5">Username</label>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                    <input type="email" value={regEmail} onChange={(e) => setRegEmail(e.target.value)}
-                      placeholder="you@example.com" autoComplete="email"
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                    <input type="text" value={regUsername} onChange={(e) => setRegUsername(e.target.value)}
+                      placeholder="your_username" autoComplete="username"
                       className={`${inputCls} pl-10 pr-4`} />
                   </div>
                 </div>

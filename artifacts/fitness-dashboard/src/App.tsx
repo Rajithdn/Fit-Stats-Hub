@@ -1,7 +1,5 @@
 import { useEffect } from "react";
-import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "@/lib/firebase";
-import { useStore, fetchAndLoadUserData } from "@/store/useStore";
+import { useStore, fetchAndLoadUserData, getToken, TOKEN_KEY } from "@/store/useStore";
 import { Dashboard } from "@/components/sections/Dashboard";
 import { Nutrition } from "@/components/sections/Nutrition";
 import { DietPlanner } from "@/components/sections/DietPlanner";
@@ -23,23 +21,30 @@ export default function App() {
   const { activeSection, theme, isAuthenticated, isLoading, login, loadUserData, setLoading, logout } = useStore();
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        logout();
-        setLoading(false);
-        return;
-      }
+    const token = getToken();
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
+    // Verify token by loading user data
+    (async () => {
       try {
-        login(user.uid, user.email ?? '');
-        const data = await fetchAndLoadUserData(user.uid);
+        // Decode userId/username from the JWT payload (base64 middle part)
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        login(String(payload.userId), payload.username ?? '');
+
+        const data = await fetchAndLoadUserData();
         loadUserData(data);
       } catch {
+        // Token invalid or expired — clear it
+        localStorage.removeItem(TOKEN_KEY);
+        sessionStorage.removeItem(TOKEN_KEY);
         logout();
       } finally {
         setLoading(false);
       }
-    });
-    return unsub;
+    })();
   }, []);
 
   if (isLoading) {

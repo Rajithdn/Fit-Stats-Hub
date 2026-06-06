@@ -1,22 +1,6 @@
 import { create } from 'zustand';
-import { today } from '@/lib/api';
-import {
-  setProfile,
-  getTodayFoodLogs,
-  addFoodLog,
-  deleteFoodLog,
-  getWorkoutLogs,
-  addWorkoutLog as fbAddWorkoutLog,
-  deleteWorkoutLog,
-  getStepEntries,
-  setStepEntry,
-  getMeasurements,
-  addMeasurement as fbAddMeasurement,
-  deleteMeasurement,
-  getDailyLog,
-  setDailyLog,
-} from '@/lib/firebaseDb';
 
+// ── Types ─────────────────────────────────────────────────────────────────────
 export type UserProfile = {
   name: string;
   age: number;
@@ -80,7 +64,7 @@ export type DailyLog = {
 
 type StoreState = {
   uid: string | null;
-  email: string;
+  username: string;
   isAuthenticated: boolean;
   isLoading: boolean;
   profilePhoto: string;
@@ -93,7 +77,7 @@ type StoreState = {
   theme: 'dark' | 'light';
   activeSection: string;
 
-  login: (uid: string, email: string) => void;
+  login: (uid: string, username: string) => void;
   logout: () => void;
   setLoading: (v: boolean) => void;
   loadUserData: (data: {
@@ -102,69 +86,125 @@ type StoreState = {
     workoutLogs: WorkoutLogEntry[];
     stepEntries: StepEntry[];
     measurements: MeasurementEntry[];
-    dailyLog: { water: number; sleep: number };
+    dailyLog: { water: number | string; sleep: number | string };
   }) => void;
 
-  updateProfile: (profile: Partial<UserProfile>) => void;
+  updateProfile: (profile: Partial<UserProfile & { profilePhoto?: string; stepGoal?: number; theme?: string }>) => void;
   setProfilePhoto: (photo: string) => void;
   updateDailyLog: (log: Partial<DailyLog>) => void;
-  addFoodToLog: (food: FoodEntry) => void;
+  addFoodToLog: (food: Omit<FoodEntry, 'id'>) => void;
   removeFoodFromLog: (id: string) => void;
-  addWorkoutLog: (entry: WorkoutLogEntry) => void;
+  addWorkoutLog: (entry: Omit<WorkoutLogEntry, 'id'>) => void;
   removeWorkoutLog: (id: string) => void;
   updateStepEntry: (date: string, steps: number) => void;
   setStepGoal: (goal: number) => void;
-  addMeasurement: (entry: MeasurementEntry) => void;
+  addMeasurement: (entry: Omit<MeasurementEntry, 'id'>) => void;
   removeMeasurement: (id: string) => void;
   setTheme: (theme: 'dark' | 'light') => void;
   setActiveSection: (section: string) => void;
   completeOnboarding: (profile: UserProfile) => void;
 };
 
-const BLANK_PROFILE: UserProfile = {
-  name: '',
-  age: 25,
-  gender: 'male',
-  height: 170,
-  weight: 70,
-  targetWeight: 65,
-  activityLevel: 'Moderately Active',
-  goal: 'Weight Loss',
-  dailyCalorieGoal: 2000,
-};
+// ── Constants ─────────────────────────────────────────────────────────────────
+export const TOKEN_KEY = 'termfit-auth-token';
 
-function parseNum(v: unknown): number {
-  const n = typeof v === 'string' ? parseFloat(v) : Number(v);
-  return isNaN(n) ? 0 : n;
+export function today(): string {
+  return new Date().toISOString().split('T')[0];
 }
 
-function mapProfile(p: Record<string, unknown>): {
-  profile: UserProfile;
-  photo: string;
-  stepGoal: number;
-  theme: 'dark' | 'light';
-} {
+export function getToken(): string {
+  return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY) || '';
+}
+
+// ── REST API helper ───────────────────────────────────────────────────────────
+async function api<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = getToken();
+  const res = await fetch(path, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers ?? {}),
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => 'Request failed');
+    throw new Error(text);
+  }
+  return res.json() as Promise<T>;
+}
+
+// ── Mappers ───────────────────────────────────────────────────────────────────
+function n(v: unknown): number {
+  const x = typeof v === 'string' ? parseFloat(v) : Number(v);
+  return isNaN(x) ? 0 : x;
+}
+
+function mapProfile(p: Record<string, unknown>) {
   return {
     profile: {
       name: (p.name as string) ?? '',
-      age: parseNum(p.age),
+      age: n(p.age),
       gender: ((p.gender as string) ?? 'male') as UserProfile['gender'],
-      height: parseNum(p.height),
-      weight: parseNum(p.weight),
-      targetWeight: parseNum(p.targetWeight),
+      height: n(p.height),
+      weight: n(p.weight),
+      targetWeight: n(p.targetWeight),
       activityLevel: ((p.activityLevel as string) ?? 'Moderately Active') as UserProfile['activityLevel'],
       goal: ((p.goal as string) ?? 'Weight Loss') as UserProfile['goal'],
-      dailyCalorieGoal: parseNum(p.dailyCalorieGoal),
+      dailyCalorieGoal: n(p.dailyCalorieGoal) || 2000,
     },
     photo: (p.profilePhoto as string) ?? '',
-    stepGoal: parseNum(p.stepGoal) || 10000,
+    stepGoal: n(p.stepGoal) || 10000,
     theme: ((p.theme as string) ?? 'dark') as 'dark' | 'light',
   };
 }
 
+function mapFood(r: Record<string, unknown>): FoodEntry {
+  return {
+    id: String(r.id),
+    name: r.name as string,
+    calories: n(r.calories),
+    protein: n(r.protein),
+    carbs: n(r.carbs),
+    fat: n(r.fat),
+    fiber: n(r.fiber),
+  };
+}
+
+function mapWorkout(r: Record<string, unknown>): WorkoutLogEntry {
+  return {
+    id: String(r.id),
+    date: r.date as string,
+    exercise: r.exercise as string,
+    sets: n(r.sets),
+    reps: n(r.reps),
+    weight: n(r.weight),
+    unit: (r.unit as 'kg' | 'lbs') ?? 'kg',
+    notes: (r.notes as string) ?? '',
+  };
+}
+
+function mapMeasurement(r: Record<string, unknown>): MeasurementEntry {
+  return {
+    id: String(r.id),
+    date: r.date as string,
+    chest: n(r.chest), waist: n(r.waist), hips: n(r.hips),
+    leftArm: n(r.leftArm), rightArm: n(r.rightArm),
+    leftThigh: n(r.leftThigh), rightThigh: n(r.rightThigh),
+    shoulders: n(r.shoulders), neck: n(r.neck),
+    notes: (r.notes as string) ?? '',
+  };
+}
+
+// ── Store defaults ────────────────────────────────────────────────────────────
+const BLANK_PROFILE: UserProfile = {
+  name: '', age: 25, gender: 'male', height: 170, weight: 70, targetWeight: 65,
+  activityLevel: 'Moderately Active', goal: 'Weight Loss', dailyCalorieGoal: 2000,
+};
+
 const RESET = {
   uid: null as string | null,
-  email: '',
+  username: '',
   isAuthenticated: false,
   isLoading: false,
   profilePhoto: '',
@@ -178,13 +218,18 @@ const RESET = {
   activeSection: 'Dashboard',
 };
 
-export const useStore = create<StoreState>()((set, get) => ({
+// ── Store ─────────────────────────────────────────────────────────────────────
+export const useStore = create<StoreState>()((set, _get) => ({
   ...RESET,
   isLoading: true,
 
-  login: (uid, email) => set({ uid, email, isAuthenticated: true }),
+  login: (uid, username) => set({ uid, username, isAuthenticated: true }),
 
-  logout: () => set({ ...RESET }),
+  logout: () => {
+    localStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
+    set({ ...RESET, isLoading: false });
+  },
 
   setLoading: (v) => set({ isLoading: v }),
 
@@ -194,11 +239,12 @@ export const useStore = create<StoreState>()((set, get) => ({
       set({ userProfile: up, profilePhoto: photo, stepGoal, theme });
     }
     set({
+      isAuthenticated: true,
       dailyLog: {
         foods: foodLogs,
         workouts: [],
-        water: parseNum(dailyLog.water),
-        sleep: parseNum(dailyLog.sleep),
+        water: n(dailyLog.water),
+        sleep: n(dailyLog.sleep),
       },
       workoutLogs,
       stepEntries,
@@ -206,61 +252,65 @@ export const useStore = create<StoreState>()((set, get) => ({
     });
   },
 
-  updateProfile: (profile) => {
-    set((s) => ({ userProfile: { ...s.userProfile, ...profile } }));
-    const { uid } = get();
-    if (uid) setProfile(uid, profile as Record<string, unknown>).catch(console.error);
+  updateProfile: (patch) => {
+    set((s) => ({ userProfile: { ...s.userProfile, ...patch } }));
+    if (patch.profilePhoto !== undefined) set({ profilePhoto: patch.profilePhoto });
+    if (patch.theme !== undefined) set({ theme: patch.theme as 'dark' | 'light' });
+    if (patch.stepGoal !== undefined) set({ stepGoal: Number(patch.stepGoal) });
+    api('/api/profile', { method: 'PUT', body: JSON.stringify(patch) }).catch(console.error);
   },
 
   setProfilePhoto: (photo) => {
     set({ profilePhoto: photo });
-    const { uid } = get();
-    if (uid) setProfile(uid, { profilePhoto: photo }).catch(console.error);
+    api('/api/profile', { method: 'PUT', body: JSON.stringify({ profilePhoto: photo }) }).catch(console.error);
   },
 
   updateDailyLog: (log) => {
     set((s) => ({ dailyLog: { ...s.dailyLog, ...log } }));
-    const { uid } = get();
-    if (!uid) return;
-    const patch: Partial<{ water: number; sleep: number }> = {};
+    const patch: Record<string, number> = {};
     if (log.water !== undefined) patch.water = log.water;
     if (log.sleep !== undefined) patch.sleep = log.sleep;
-    if (Object.keys(patch).length > 0) setDailyLog(uid, today(), patch).catch(console.error);
+    if (Object.keys(patch).length > 0) {
+      api('/api/daily-logs', { method: 'POST', body: JSON.stringify({ date: today(), ...patch }) }).catch(console.error);
+    }
   },
 
   addFoodToLog: (food) => {
     const tempId = `tmp-${Date.now()}`;
     set((s) => ({ dailyLog: { ...s.dailyLog, foods: [...s.dailyLog.foods, { ...food, id: tempId }] } }));
-    const { uid } = get();
-    if (!uid) return;
-    addFoodLog(uid, { ...food, date: today() }).then((id) => {
+    api<Record<string, unknown>>('/api/food-logs', {
+      method: 'POST',
+      body: JSON.stringify({ ...food, date: today() }),
+    }).then((row) => {
       set((s) => ({
-        dailyLog: { ...s.dailyLog, foods: s.dailyLog.foods.map((f) => (f.id === tempId ? { ...f, id } : f)) },
+        dailyLog: { ...s.dailyLog, foods: s.dailyLog.foods.map((f) => f.id === tempId ? mapFood(row) : f) },
       }));
     }).catch(console.error);
   },
 
   removeFoodFromLog: (id) => {
     set((s) => ({ dailyLog: { ...s.dailyLog, foods: s.dailyLog.foods.filter((f) => f.id !== id) } }));
-    const { uid } = get();
-    if (uid && !id.startsWith('tmp-')) deleteFoodLog(uid, id).catch(console.error);
+    if (!id.startsWith('tmp-')) {
+      api(`/api/food-logs/${id}`, { method: 'DELETE' }).catch(console.error);
+    }
   },
 
   addWorkoutLog: (entry) => {
     const tempId = `tmp-${Date.now()}`;
     set((s) => ({ workoutLogs: [{ ...entry, id: tempId }, ...s.workoutLogs] }));
-    const { uid } = get();
-    if (!uid) return;
-    const { id: _id, ...rest } = entry;
-    fbAddWorkoutLog(uid, rest).then((id) => {
-      set((s) => ({ workoutLogs: s.workoutLogs.map((w) => (w.id === tempId ? { ...w, id } : w)) }));
+    api<Record<string, unknown>>('/api/workout-logs', {
+      method: 'POST',
+      body: JSON.stringify(entry),
+    }).then((row) => {
+      set((s) => ({ workoutLogs: s.workoutLogs.map((w) => w.id === tempId ? mapWorkout(row) : w) }));
     }).catch(console.error);
   },
 
   removeWorkoutLog: (id) => {
     set((s) => ({ workoutLogs: s.workoutLogs.filter((e) => e.id !== id) }));
-    const { uid } = get();
-    if (uid && !id.startsWith('tmp-')) deleteWorkoutLog(uid, id).catch(console.error);
+    if (!id.startsWith('tmp-')) {
+      api(`/api/workout-logs/${id}`, { method: 'DELETE' }).catch(console.error);
+    }
   },
 
   updateStepEntry: (date, steps) => {
@@ -273,58 +323,62 @@ export const useStore = create<StoreState>()((set, get) => ({
       }
       return { stepEntries: [{ date, steps }, ...s.stepEntries] };
     });
-    const { uid } = get();
-    if (uid) setStepEntry(uid, date, steps).catch(console.error);
+    api('/api/steps', { method: 'POST', body: JSON.stringify({ date, steps }) }).catch(console.error);
   },
 
   setStepGoal: (goal) => {
     set({ stepGoal: goal });
-    const { uid } = get();
-    if (uid) setProfile(uid, { stepGoal: goal }).catch(console.error);
+    api('/api/profile', { method: 'PUT', body: JSON.stringify({ stepGoal: goal }) }).catch(console.error);
   },
 
   addMeasurement: (entry) => {
     const tempId = `tmp-${Date.now()}`;
     set((s) => ({ measurements: [{ ...entry, id: tempId }, ...s.measurements] }));
-    const { uid } = get();
-    if (!uid) return;
-    const { id: _id, ...rest } = entry;
-    fbAddMeasurement(uid, rest).then((id) => {
-      set((s) => ({ measurements: s.measurements.map((m) => (m.id === tempId ? { ...m, id } : m)) }));
+    api<Record<string, unknown>>('/api/measurements', {
+      method: 'POST',
+      body: JSON.stringify(entry),
+    }).then((row) => {
+      set((s) => ({ measurements: s.measurements.map((m) => m.id === tempId ? mapMeasurement(row) : m) }));
     }).catch(console.error);
   },
 
   removeMeasurement: (id) => {
     set((s) => ({ measurements: s.measurements.filter((m) => m.id !== id) }));
-    const { uid } = get();
-    if (uid && !id.startsWith('tmp-')) deleteMeasurement(uid, id).catch(console.error);
+    if (!id.startsWith('tmp-')) {
+      api(`/api/measurements/${id}`, { method: 'DELETE' }).catch(console.error);
+    }
   },
 
   setTheme: (theme) => {
     set({ theme });
-    const { uid } = get();
-    if (uid) setProfile(uid, { theme }).catch(console.error);
+    api('/api/profile', { method: 'PUT', body: JSON.stringify({ theme }) }).catch(console.error);
   },
 
   setActiveSection: (section) => set({ activeSection: section }),
 
   completeOnboarding: (profile) => {
     set({ userProfile: profile });
-    const { uid } = get();
-    if (uid) setProfile(uid, profile as unknown as Record<string, unknown>).catch(console.error);
+    api('/api/profile', { method: 'PUT', body: JSON.stringify(profile) }).catch(console.error);
   },
 }));
 
-// Helper: load all user data from Firestore after sign-in
-export async function fetchAndLoadUserData(uid: string) {
+// ── Load all user data ────────────────────────────────────────────────────────
+export async function fetchAndLoadUserData() {
   const t = today();
   const [profile, foodLogs, workoutLogs, stepEntries, measurements, dailyLog] = await Promise.all([
-    import('@/lib/firebaseDb').then((m) => m.getProfile(uid)),
-    getTodayFoodLogs(uid, t),
-    getWorkoutLogs(uid),
-    getStepEntries(uid),
-    getMeasurements(uid),
-    getDailyLog(uid, t),
+    api<Record<string, unknown>>('/api/profile'),
+    api<Record<string, unknown>[]>(`/api/food-logs?date=${t}`),
+    api<Record<string, unknown>[]>('/api/workout-logs'),
+    api<Record<string, unknown>[]>('/api/steps'),
+    api<Record<string, unknown>[]>('/api/measurements'),
+    api<Record<string, unknown>>(`/api/daily-logs?date=${t}`),
   ]);
-  return { profile, foodLogs, workoutLogs, stepEntries, measurements, dailyLog };
+  return {
+    profile,
+    foodLogs: foodLogs.map(mapFood),
+    workoutLogs: workoutLogs.map(mapWorkout),
+    stepEntries: stepEntries.map((r) => ({ id: String(r.id), date: r.date as string, steps: n(r.steps) })),
+    measurements: measurements.map(mapMeasurement),
+    dailyLog: { water: n(dailyLog.water), sleep: n(dailyLog.sleep) },
+  };
 }

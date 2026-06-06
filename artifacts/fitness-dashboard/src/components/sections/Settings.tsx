@@ -9,11 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { UserProfile } from "@/store/useStore";
 import { User, Target, Settings2, Camera, Trash2, ShieldCheck, Eye, EyeOff, Loader2, CheckCircle2 } from "lucide-react";
-import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { getToken } from "@/store/useStore";
 
 export function Settings() {
-  const { userProfile, profilePhoto, theme, email, setTheme, updateProfile, setProfilePhoto } = useStore();
+  const { userProfile, profilePhoto, theme, username, setTheme, updateProfile, setProfilePhoto } = useStore();
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -66,20 +65,20 @@ export function Settings() {
     if (currentPw === newPw) { setPwError("New password must be different from current"); return; }
     setPwLoading(true);
     try {
-      const user = auth.currentUser;
-      if (!user || !user.email) throw new Error("Not signed in");
-      const cred = EmailAuthProvider.credential(user.email, currentPw);
-      await reauthenticateWithCredential(user, cred);
-      await updatePassword(user, newPw);
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setPwError(data.error ?? "Failed to change password"); return; }
       setCurrentPw(""); setNewPw(""); setConfirmPw(""); setPwError("");
       toast({ title: "Password changed!", description: "Your password has been updated successfully." });
-    } catch (err: any) {
-      const code: string = err.code ?? "";
-      if (code.includes("wrong-password") || code.includes("invalid-credential")) {
-        setPwError("Current password is incorrect");
-      } else {
-        setPwError(err.message || "Failed to change password");
-      }
+    } catch {
+      setPwError("Network error — please try again");
     } finally {
       setPwLoading(false);
     }
@@ -122,7 +121,7 @@ export function Settings() {
             <div className="space-y-2">
               <p className="font-medium">{userProfile.name || "Your Name"}</p>
               <p className="text-sm text-muted-foreground">
-                {email || ""}{userProfile.goal ? ` · ${userProfile.goal}` : ""}
+                {username ? `@${username}` : ""}{userProfile.goal ? ` · ${userProfile.goal}` : ""}
               </p>
               <div className="flex gap-2 pt-1">
                 <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
@@ -282,10 +281,10 @@ export function Settings() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleChangePassword} className="space-y-4">
-            {email && (
+            {username && (
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-sm text-emerald-400">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
-                <span>Signed in as <strong>{email}</strong></span>
+                <span>Signed in as <strong>@{username}</strong></span>
               </div>
             )}
 
