@@ -443,4 +443,12 @@ app.post("/api/daily-logs", requireAuth, async (req: AuthRequest, res) => {
   } catch { res.status(500).json({ error: "Failed to update daily log" }); }
 });
 
+// ── Global JSON error handler (must be last) ──────────────────────────────────
+// Without this, Express returns HTML on errors → frontend can't parse → "Request failed"
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  console.error("[API Error]", err?.message ?? err);
+  const status = typeof err?.status === "number" ? err.status : 500;
+  res.status(status).json({ error: err?.message ?? "Internal server error" });
+});
+
 export default app;
