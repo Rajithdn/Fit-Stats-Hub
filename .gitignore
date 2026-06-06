@@ -2,7 +2,6 @@
 
 # compiled output
 dist
-public
 tmp
 out-tsc
 *.tsbuildinfo
@@ -48,6 +47,3 @@ Thumbs.db
 # Replit
 .cache/
 .local/
-
-# Firebase build output
-functions/lib

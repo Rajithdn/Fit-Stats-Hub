@@ -1,38 +1,19 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Dumbbell, User, Lock, Eye, EyeOff, Loader2, UserPlus, LogIn, ChevronRight, ChevronLeft } from 'lucide-react';
-import { apiFetch, setToken, today } from '@/lib/api';
-import { useStore } from '@/store/useStore';
-
-async function fetchAllUserData() {
-  const [profile, foodLogs, workoutLogs, stepEntries, measurements, dailyLog] = await Promise.all([
-    apiFetch('/api/profile'),
-    apiFetch(`/api/food-logs?date=${today()}`),
-    apiFetch('/api/workout-logs'),
-    apiFetch('/api/steps'),
-    apiFetch('/api/measurements'),
-    apiFetch(`/api/daily-logs?date=${today()}`),
-  ]);
-  return { profile, foodLogs, workoutLogs, stepEntries, measurements, dailyLog } as any;
-}
-
-type Tab = 'login' | 'register';
-
-interface AuthResponse {
-  token: string;
-  username: string;
-  userId: number;
-}
+import { useStore, TOKEN_KEY, fetchAndLoadUserData } from '@/store/useStore';
 
 const GOALS = ['Weight Loss', 'Maintenance', 'Lean Bulk', 'Weight Gain'];
 const GENDERS = ['male', 'female', 'other'];
 const ACTIVITY_LEVELS = [
-  { value: 'Sedentary', label: 'Sedentary', sub: 'desk job, no exercise' },
-  { value: 'Lightly Active', label: 'Lightly Active', sub: '1–3 days/week' },
+  { value: 'Sedentary',         label: 'Sedentary',         sub: 'desk job, no exercise' },
+  { value: 'Lightly Active',    label: 'Lightly Active',    sub: '1–3 days/week' },
   { value: 'Moderately Active', label: 'Moderately Active', sub: '3–5 days/week' },
-  { value: 'Very Active', label: 'Very Active', sub: '6–7 days/week' },
-  { value: 'Super Active', label: 'Super Active', sub: 'athlete / physical job' },
+  { value: 'Very Active',       label: 'Very Active',       sub: '6–7 days/week' },
+  { value: 'Super Active',      label: 'Super Active',      sub: 'athlete / physical job' },
 ];
+
+type Tab = 'login' | 'register';
 
 function StepDots({ current, total }: { current: number; total: number }) {
   return (
@@ -50,13 +31,13 @@ function StepDots({ current, total }: { current: number; total: number }) {
 }
 
 export function Auth() {
+  const { login, loadUserData, setLoading: setGlobalLoading } = useStore();
   const [tab, setTab] = useState<Tab>('login');
 
   // Login
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
 
   // Register step 1 — account
   const [regUsername, setRegUsername] = useState('');
@@ -78,12 +59,20 @@ export function Auth() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const { login, loadUserData } = useStore();
+  const [rememberMe, setRememberMe] = useState(true);
 
   function switchTab(t: Tab) {
     setTab(t);
     setError('');
     setStep(1);
+  }
+
+  function storeToken(token: string) {
+    if (rememberMe) {
+      localStorage.setItem(TOKEN_KEY, token);
+    } else {
+      sessionStorage.setItem(TOKEN_KEY, token);
+    }
   }
 
   async function handleLogin(e: React.FormEvent) {
@@ -92,26 +81,32 @@ export function Auth() {
     if (!username.trim() || !password) { setError('Enter username and password'); return; }
     setLoading(true);
     try {
-      const data = await apiFetch<AuthResponse>('/api/auth/login', {
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: username.trim(), password }),
       });
-      setToken(data.token, rememberMe);
-      const userData = await fetchAllUserData();
-      login(data.token, data.username, data.userId);
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? 'Invalid username or password'); return; }
+
+      storeToken(data.token);
+      login(String(data.userId), data.username);
+      setGlobalLoading(true);
+      const userData = await fetchAndLoadUserData();
       loadUserData(userData);
-    } catch (err: any) {
-      setError(err.message || 'Something went wrong');
+    } catch {
+      setError('Network error — please try again');
     } finally {
       setLoading(false);
+      setGlobalLoading(false);
     }
   }
 
   function handleStep1Next(e: React.FormEvent) {
     e.preventDefault();
     setError('');
-    if (!regUsername.trim()) { setError('Enter a username'); return; }
-    if (!regPassword || regPassword.length < 4) { setError('Password must be at least 4 characters'); return; }
+    if (!regUsername.trim() || regUsername.trim().length < 3) { setError('Username must be at least 3 characters'); return; }
+    if (!regPassword || regPassword.length < 6) { setError('Password must be at least 6 characters'); return; }
     setStep(2);
   }
 
@@ -131,12 +126,13 @@ export function Auth() {
     setError('');
     const h = parseFloat(height), w = parseFloat(weight), tw = parseFloat(targetWeight);
     if (!height || isNaN(h) || h < 100 || h > 250) { setError('Enter a valid height (100–250 cm)'); return; }
-    if (!weight || isNaN(w) || w < 30 || w > 300) { setError('Enter a valid weight (30–300 kg)'); return; }
+    if (!weight || isNaN(w) || w < 30 || w > 300)  { setError('Enter a valid weight (30–300 kg)'); return; }
     if (!targetWeight || isNaN(tw) || tw < 30 || tw > 300) { setError('Enter a valid target weight'); return; }
     setLoading(true);
     try {
-      const data = await apiFetch<AuthResponse>('/api/auth/register', {
+      const res = await fetch('/api/auth/register', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username: regUsername.trim(),
           password: regPassword,
@@ -148,25 +144,37 @@ export function Auth() {
           targetWeight: tw,
           activityLevel,
           goal,
+          dailyCalorieGoal: 2000,
+          stepGoal: 10000,
+          theme: 'dark',
+          profilePhoto: '',
         }),
       });
-      setToken(data.token, true);
-      const userData = await fetchAllUserData();
-      login(data.token, data.username, data.userId);
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? 'Registration failed'); setStep(1); return; }
+
+      storeToken(data.token);
+      login(String(data.userId), data.username);
+      setGlobalLoading(true);
+      const userData = await fetchAndLoadUserData();
       loadUserData(userData);
-    } catch (err: any) {
-      setError(err.message || 'Something went wrong');
+    } catch {
+      setError('Network error — please try again');
       setStep(1);
     } finally {
       setLoading(false);
+      setGlobalLoading(false);
     }
   }
 
   const slideVariants = {
     enter: (dir: number) => ({ opacity: 0, x: dir > 0 ? 30 : -30 }),
     center: { opacity: 1, x: 0 },
-    exit: (dir: number) => ({ opacity: 0, x: dir > 0 ? -30 : 30 }),
+    exit:  (dir: number) => ({ opacity: 0, x: dir > 0 ? -30 : 30 }),
   };
+
+  const inputCls =
+    'w-full bg-gray-800 border border-gray-700 rounded-xl py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors text-sm';
 
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center bg-gray-950 px-4 py-8">
@@ -201,14 +209,13 @@ export function Auth() {
           </div>
 
           <AnimatePresence mode="wait" custom={1}>
+            {/* ── LOGIN ── */}
             {tab === 'login' ? (
               <motion.form
                 key="login"
                 custom={-1}
                 variants={slideVariants}
-                initial="enter"
-                animate="center"
-                exit="exit"
+                initial="enter" animate="center" exit="exit"
                 transition={{ duration: 0.2 }}
                 onSubmit={handleLogin}
                 className="space-y-4"
@@ -217,49 +224,45 @@ export function Auth() {
                   <label className="text-gray-300 text-sm font-medium block mb-1.5">Username</label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                    <input
-                      type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      placeholder="your_username"
-                      autoComplete="username"
-                      className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-10 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors text-sm"
-                    />
+                    <input type="text" value={username} onChange={(e) => setUsername(e.target.value)}
+                      placeholder="your_username" autoComplete="username"
+                      className={`${inputCls} pl-10 pr-4`} />
                   </div>
                 </div>
                 <div>
                   <label className="text-gray-300 text-sm font-medium block mb-1.5">Password</label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                    <input
-                      type={showPw ? 'text' : 'password'}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      autoComplete="current-password"
-                      className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-10 pr-11 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors text-sm"
-                    />
-                    <button type="button" onClick={() => setShowPw(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors">
+                    <input type={showPw ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••" autoComplete="current-password"
+                      className={`${inputCls} pl-10 pr-11`} />
+                    <button type="button" onClick={() => setShowPw((p) => !p)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors">
                       {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button type="button" onClick={() => setRememberMe(v => !v)}
-                    className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all flex-shrink-0 ${rememberMe ? 'bg-emerald-500 border-emerald-500' : 'border-gray-600 bg-transparent'}`}
-                  >
-                    {rememberMe && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
-                  </button>
-                  <span className="text-gray-400 text-sm cursor-pointer select-none" onClick={() => setRememberMe(v => !v)}>Remember me</span>
-                </div>
-                {error && <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">{error}</motion.p>}
-                <button type="submit" disabled={loading} className="w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 mt-2">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)}
+                    className="rounded border-gray-600 bg-gray-800 text-emerald-500 focus:ring-emerald-500" />
+                  <span className="text-gray-400 text-sm">Remember me</span>
+                </label>
+                {error && (
+                  <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                    className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
+                    {error}
+                  </motion.p>
+                )}
+                <button type="submit" disabled={loading}
+                  className="w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 mt-2">
                   {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <><LogIn className="w-4 h-4" /> Sign In</>}
                 </button>
               </motion.form>
 
             ) : step === 1 ? (
-              <motion.form key="reg-1" custom={1} variants={slideVariants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.2 }} onSubmit={handleStep1Next} className="space-y-4">
+              /* ── REGISTER STEP 1 ── */
+              <motion.form key="reg-1" custom={1} variants={slideVariants} initial="enter" animate="center" exit="exit"
+                transition={{ duration: 0.2 }} onSubmit={handleStep1Next} className="space-y-4">
                 <div className="flex items-center justify-between mb-1">
                   <p className="text-gray-400 text-xs">Step 1 of 3 — Account</p>
                   <StepDots current={1} total={3} />
@@ -268,95 +271,118 @@ export function Auth() {
                   <label className="text-gray-300 text-sm font-medium block mb-1.5">Username</label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                    <input type="text" value={regUsername} onChange={e => setRegUsername(e.target.value)} placeholder="choose_a_username" autoComplete="username"
-                      className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-10 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors text-sm" />
+                    <input type="text" value={regUsername} onChange={(e) => setRegUsername(e.target.value)}
+                      placeholder="your_username" autoComplete="username"
+                      className={`${inputCls} pl-10 pr-4`} />
                   </div>
                 </div>
                 <div>
                   <label className="text-gray-300 text-sm font-medium block mb-1.5">Password</label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                    <input type={showRegPw ? 'text' : 'password'} value={regPassword} onChange={e => setRegPassword(e.target.value)} placeholder="min 4 characters" autoComplete="new-password"
-                      className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-10 pr-11 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors text-sm" />
-                    <button type="button" onClick={() => setShowRegPw(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors">
+                    <input type={showRegPw ? 'text' : 'password'} value={regPassword} onChange={(e) => setRegPassword(e.target.value)}
+                      placeholder="min 6 characters" autoComplete="new-password"
+                      className={`${inputCls} pl-10 pr-11`} />
+                    <button type="button" onClick={() => setShowRegPw((p) => !p)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors">
                       {showRegPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
-                {error && <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">{error}</motion.p>}
-                <button type="submit" className="w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 transition-all flex items-center justify-center gap-2 mt-2">
+                {error && (
+                  <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                    className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
+                    {error}
+                  </motion.p>
+                )}
+                <button type="submit"
+                  className="w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 transition-all flex items-center justify-center gap-2 mt-2">
                   Next <ChevronRight className="w-4 h-4" />
                 </button>
               </motion.form>
 
             ) : step === 2 ? (
-              <motion.form key="reg-2" custom={1} variants={slideVariants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.2 }} onSubmit={handleStep2Next} className="space-y-4">
+              /* ── REGISTER STEP 2 ── */
+              <motion.form key="reg-2" custom={1} variants={slideVariants} initial="enter" animate="center" exit="exit"
+                transition={{ duration: 0.2 }} onSubmit={handleStep2Next} className="space-y-4">
                 <div className="flex items-center justify-between mb-1">
                   <p className="text-gray-400 text-xs">Step 2 of 3 — Personal Info</p>
                   <StepDots current={2} total={3} />
                 </div>
                 <div>
                   <label className="text-gray-300 text-sm font-medium block mb-1.5">Full Name</label>
-                  <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Your full name"
-                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors text-sm" />
+                  <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your full name"
+                    className={`${inputCls} px-4`} />
                 </div>
                 <div>
                   <label className="text-gray-300 text-sm font-medium block mb-1.5">Age</label>
-                  <input type="number" value={age} onChange={e => setAge(e.target.value)} placeholder="e.g. 25" min={10} max={120}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors text-sm" />
+                  <input type="number" value={age} onChange={(e) => setAge(e.target.value)} placeholder="e.g. 25" min={10} max={120}
+                    className={`${inputCls} px-4`} />
                 </div>
                 <div>
                   <label className="text-gray-300 text-sm font-medium block mb-1.5">Gender</label>
                   <div className="grid grid-cols-3 gap-2">
-                    {GENDERS.map(g => (
+                    {GENDERS.map((g) => (
                       <button key={g} type="button" onClick={() => setGender(g)}
-                        className={`py-2.5 rounded-xl text-sm font-medium capitalize transition-all ${gender === g ? 'bg-emerald-500 text-white' : 'bg-gray-800 border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600'}`}>
+                        className={`py-2.5 rounded-xl text-sm font-medium capitalize transition-all ${
+                          gender === g
+                            ? 'bg-emerald-500 text-white'
+                            : 'bg-gray-800 border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600'
+                        }`}>
                         {g}
                       </button>
                     ))}
                   </div>
                 </div>
-                {error && <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">{error}</motion.p>}
+                {error && (
+                  <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                    className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
+                    {error}
+                  </motion.p>
+                )}
                 <div className="flex gap-3 mt-2">
                   <button type="button" onClick={() => { setStep(1); setError(''); }}
                     className="flex-1 py-3 rounded-xl font-semibold text-gray-300 bg-gray-800 border border-gray-700 hover:bg-gray-700 transition-all flex items-center justify-center gap-2">
                     <ChevronLeft className="w-4 h-4" /> Back
                   </button>
-                  <button type="submit" className="flex-1 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 transition-all flex items-center justify-center gap-2">
+                  <button type="submit"
+                    className="flex-1 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 transition-all flex items-center justify-center gap-2">
                     Next <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
               </motion.form>
 
             ) : (
-              <motion.form key="reg-3" custom={1} variants={slideVariants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.2 }} onSubmit={handleStep3Submit} className="space-y-4">
+              /* ── REGISTER STEP 3 ── */
+              <motion.form key="reg-3" custom={1} variants={slideVariants} initial="enter" animate="center" exit="exit"
+                transition={{ duration: 0.2 }} onSubmit={handleStep3Submit} className="space-y-4">
                 <div className="flex items-center justify-between mb-1">
                   <p className="text-gray-400 text-xs">Step 3 of 3 — Fitness Info</p>
                   <StepDots current={3} total={3} />
                 </div>
                 <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-gray-300 text-xs font-medium block mb-1.5">Height (cm)</label>
-                    <input type="number" value={height} onChange={e => setHeight(e.target.value)} placeholder="170" min={100} max={250}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors text-sm" />
-                  </div>
-                  <div>
-                    <label className="text-gray-300 text-xs font-medium block mb-1.5">Weight (kg)</label>
-                    <input type="number" value={weight} onChange={e => setWeight(e.target.value)} placeholder="70" min={30} max={300} step={0.1}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors text-sm" />
-                  </div>
-                  <div>
-                    <label className="text-gray-300 text-xs font-medium block mb-1.5">Target (kg)</label>
-                    <input type="number" value={targetWeight} onChange={e => setTargetWeight(e.target.value)} placeholder="65" min={30} max={300} step={0.1}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors text-sm" />
-                  </div>
+                  {[
+                    { label: 'Height (cm)', val: height, set: setHeight, ph: '170', min: 100, max: 250 },
+                    { label: 'Weight (kg)', val: weight, set: setWeight, ph: '70', min: 30, max: 300 },
+                    { label: 'Target (kg)', val: targetWeight, set: setTargetWeight, ph: '65', min: 30, max: 300 },
+                  ].map(({ label, val, set: sv, ph, min, max }) => (
+                    <div key={label}>
+                      <label className="text-gray-300 text-xs font-medium block mb-1.5">{label}</label>
+                      <input type="number" value={val} onChange={(e) => sv(e.target.value)} placeholder={ph} min={min} max={max} step={0.1}
+                        className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors text-sm" />
+                    </div>
+                  ))}
                 </div>
                 <div>
                   <label className="text-gray-300 text-sm font-medium block mb-1.5">Activity Level</label>
                   <div className="space-y-1.5">
-                    {ACTIVITY_LEVELS.map(a => (
+                    {ACTIVITY_LEVELS.map((a) => (
                       <button key={a.value} type="button" onClick={() => setActivityLevel(a.value)}
-                        className={`w-full py-2 px-3 rounded-xl text-sm text-left transition-all flex items-center justify-between ${activityLevel === a.value ? 'bg-emerald-500/20 border border-emerald-500 text-emerald-400' : 'bg-gray-800 border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600'}`}>
+                        className={`w-full py-2 px-3 rounded-xl text-sm text-left transition-all flex items-center justify-between ${
+                          activityLevel === a.value
+                            ? 'bg-emerald-500/20 border border-emerald-500 text-emerald-400'
+                            : 'bg-gray-800 border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600'
+                        }`}>
                         <span className="font-medium">{a.label}</span>
                         <span className="text-xs opacity-70">{a.sub}</span>
                       </button>
@@ -366,15 +392,24 @@ export function Auth() {
                 <div>
                   <label className="text-gray-300 text-sm font-medium block mb-1.5">Goal</label>
                   <div className="grid grid-cols-2 gap-2">
-                    {GOALS.map(g => (
+                    {GOALS.map((g) => (
                       <button key={g} type="button" onClick={() => setGoal(g)}
-                        className={`py-2.5 px-3 rounded-xl text-sm font-medium text-center transition-all ${goal === g ? 'bg-emerald-500/20 border border-emerald-500 text-emerald-400' : 'bg-gray-800 border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600'}`}>
+                        className={`py-2.5 px-3 rounded-xl text-sm font-medium text-center transition-all ${
+                          goal === g
+                            ? 'bg-emerald-500/20 border border-emerald-500 text-emerald-400'
+                            : 'bg-gray-800 border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600'
+                        }`}>
                         {g}
                       </button>
                     ))}
                   </div>
                 </div>
-                {error && <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">{error}</motion.p>}
+                {error && (
+                  <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                    className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
+                    {error}
+                  </motion.p>
+                )}
                 <div className="flex gap-3 mt-2">
                   <button type="button" onClick={() => { setStep(2); setError(''); }}
                     className="flex-1 py-3 rounded-xl font-semibold text-gray-300 bg-gray-800 border border-gray-700 hover:bg-gray-700 transition-all flex items-center justify-center gap-2">
@@ -391,7 +426,8 @@ export function Auth() {
 
           <p className="text-center text-gray-500 text-xs mt-6">
             {tab === 'login' ? "Don't have an account? " : 'Already have an account? '}
-            <button onClick={() => switchTab(tab === 'login' ? 'register' : 'login')} className="text-emerald-400 hover:text-emerald-300 font-medium transition-colors">
+            <button onClick={() => switchTab(tab === 'login' ? 'register' : 'login')}
+              className="text-emerald-400 hover:text-emerald-300 font-medium transition-colors">
               {tab === 'login' ? 'Register here' : 'Sign in'}
             </button>
           </p>

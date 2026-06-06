@@ -1,6 +1,5 @@
 import { useEffect } from "react";
-import { useStore } from "@/store/useStore";
-import { apiFetch, getToken } from "@/lib/api";
+import { useStore, fetchAndLoadUserData, getToken, TOKEN_KEY } from "@/store/useStore";
 import { Dashboard } from "@/components/sections/Dashboard";
 import { Nutrition } from "@/components/sections/Nutrition";
 import { DietPlanner } from "@/components/sections/DietPlanner";
@@ -18,22 +17,6 @@ import { Layout } from "@/components/Layout";
 import { Auth } from "@/components/Auth";
 import { Loader2 } from "lucide-react";
 
-function today() {
-  return new Date().toISOString().split("T")[0];
-}
-
-async function fetchAllUserData() {
-  const [profile, foodLogs, workoutLogs, stepEntries, measurements, dailyLog] = await Promise.all([
-    apiFetch("/api/profile"),
-    apiFetch(`/api/food-logs?date=${today()}`),
-    apiFetch("/api/workout-logs"),
-    apiFetch("/api/steps"),
-    apiFetch("/api/measurements"),
-    apiFetch(`/api/daily-logs?date=${today()}`),
-  ]);
-  return { profile, foodLogs, workoutLogs, stepEntries, measurements, dailyLog } as any;
-}
-
 export default function App() {
   const { activeSection, theme, isAuthenticated, isLoading, login, loadUserData, setLoading, logout } = useStore();
 
@@ -43,17 +26,25 @@ export default function App() {
       setLoading(false);
       return;
     }
-    fetchAllUserData()
-      .then((data) => {
-        const username = (data.profile as any)?.username ?? '';
-        login(token, username, 0);
+
+    // Verify token by loading user data
+    (async () => {
+      try {
+        // Decode userId/username from the JWT payload (base64 middle part)
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        login(String(payload.userId), payload.username ?? '');
+
+        const data = await fetchAndLoadUserData();
         loadUserData(data);
-        setLoading(false);
-      })
-      .catch(() => {
+      } catch {
+        // Token invalid or expired — clear it
+        localStorage.removeItem(TOKEN_KEY);
+        sessionStorage.removeItem(TOKEN_KEY);
         logout();
+      } finally {
         setLoading(false);
-      });
+      }
+    })();
   }, []);
 
   if (isLoading) {
@@ -73,20 +64,20 @@ export default function App() {
 
   const renderSection = () => {
     switch (activeSection) {
-      case "Dashboard":        return <Dashboard />;
-      case "Nutrition":        return <Nutrition />;
-      case "Diet Planner":     return <DietPlanner />;
-      case "Workout Planner":  return <WorkoutPlanner />;
-      case "Workout Logger":   return <WorkoutLogger />;
-      case "Home Workout":     return <HomeWorkout />;
-      case "Daily Steps":      return <DailySteps />;
-      case "Body Measurements":return <BodyMeasurements />;
+      case "Dashboard":         return <Dashboard />;
+      case "Nutrition":         return <Nutrition />;
+      case "Diet Planner":      return <DietPlanner />;
+      case "Workout Planner":   return <WorkoutPlanner />;
+      case "Workout Logger":    return <WorkoutLogger />;
+      case "Home Workout":      return <HomeWorkout />;
+      case "Daily Steps":       return <DailySteps />;
+      case "Body Measurements": return <BodyMeasurements />;
       case "Health Report Analyzer": return <HealthReportAnalyzer />;
-      case "Progress Tracker": return <ProgressTracker />;
-      case "Progress Photos":  return <ProgressPhotos />;
-      case "AI Coach":         return <AICoach />;
-      case "Settings":         return <Settings />;
-      default:                 return <Dashboard />;
+      case "Progress Tracker":  return <ProgressTracker />;
+      case "Progress Photos":   return <ProgressPhotos />;
+      case "AI Coach":          return <AICoach />;
+      case "Settings":          return <Settings />;
+      default:                  return <Dashboard />;
     }
   };
 

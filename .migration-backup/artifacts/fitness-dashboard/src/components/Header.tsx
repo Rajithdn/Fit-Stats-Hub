@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useStore } from "@/store/useStore";
 import { Bell, Moon, Sun, Menu, Settings, LogOut, User, CheckCheck, Dumbbell, Apple, Droplets, Footprints } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, type Variants } from "framer-motion";
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -48,9 +48,9 @@ export function Header({ onMenuClick }: HeaderProps) {
     ? userProfile.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2)
     : username?.[0]?.toUpperCase() || "?";
 
-  const dropdownVariants = {
+  const dropdownVariants: Variants = {
     hidden: { opacity: 0, scale: 0.95, y: -8 },
-    visible: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.15, ease: "easeOut" } },
+    visible: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.15, ease: "easeOut" as const } },
     exit: { opacity: 0, scale: 0.95, y: -8, transition: { duration: 0.1 } },
   };
 
@@ -201,7 +201,7 @@ export function Header({ onMenuClick }: HeaderProps) {
 
                 <div className="p-1.5 border-t border-border/60">
                   <button
-                    onClick={() => { logout(); setProfileOpen(false); }}
+                    onClick={() => { setProfileOpen(false); logout(); }}
                     className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-red-400 hover:bg-red-400/10 transition-colors"
                   >
                     <LogOut className="w-4 h-4" />

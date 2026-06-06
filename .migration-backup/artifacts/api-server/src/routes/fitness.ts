@@ -1,5 +1,4 @@
-import express, { Request, Response, NextFunction } from "express";
-import cors from "cors";
+import { Router, type Request, type Response, type NextFunction } from "express";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { pgTable, serial, text, integer, numeric, timestamp, date, unique } from "drizzle-orm/pg-core";
@@ -7,7 +6,6 @@ import { eq, and } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
-// ── Schema ────────────────────────────────────────────────────────────────────
 const users = pgTable("users", {
   id:           serial("id").primaryKey(),
   username:     text("username").unique().notNull(),
@@ -91,17 +89,29 @@ const dailyLogs = pgTable("daily_logs", {
   sleep:  numeric("sleep").default("0").notNull(),
 }, (t) => [unique().on(t.userId, t.date)]);
 
-// ── DB ────────────────────────────────────────────────────────────────────────
 const { Pool } = pg;
-const dbUrl = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL;
-if (!dbUrl) throw new Error("No DATABASE_URL or NEON_DATABASE_URL set");
-const pool = new Pool({ connectionString: dbUrl, ssl: { rejectUnauthorized: false } });
+const connStr = process.env.DATABASE_URL;
+if (!connStr) throw new Error("DATABASE_URL is required");
+const pool = new Pool({ connectionString: connStr });
 const db = drizzle(pool);
 
-// Auto-create tables on first request (needed for Vercel / fresh databases)
-let dbReady = false;
-async function ensureDb() {
-  if (dbReady) return;
+const JWT_SECRET = process.env.JWT_SECRET || "termfit-jwt-secret-dev-only";
+
+interface AuthRequest extends Request { userId?: number; }
+
+function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
+  const header = req.headers.authorization;
+  if (!header?.startsWith("Bearer ")) { res.status(401).json({ error: "No token provided" }); return; }
+  try {
+    const payload = jwt.verify(header.slice(7), JWT_SECRET) as { userId: number };
+    req.userId = payload.userId;
+    next();
+  } catch {
+    res.status(401).json({ error: "Invalid or expired token" });
+  }
+}
+
+export async function initDb() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
@@ -182,61 +192,11 @@ async function ensureDb() {
       UNIQUE(user_id, date)
     );
   `);
-  dbReady = true;
 }
 
-// ── Auth ──────────────────────────────────────────────────────────────────────
-const JWT_SECRET = process.env.JWT_SECRET || "termfit-jwt-secret-dev-only";
+const router = Router();
 
-interface AuthRequest extends Request { userId?: number; }
-
-function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
-  const header = req.headers.authorization;
-  if (!header?.startsWith("Bearer ")) { res.status(401).json({ error: "No token provided" }); return; }
-  try {
-    const payload = jwt.verify(header.slice(7), JWT_SECRET) as { userId: number };
-    req.userId = payload.userId;
-    next();
-  } catch {
-    res.status(401).json({ error: "Invalid or expired token" });
-  }
-}
-
-// ── App ───────────────────────────────────────────────────────────────────────
-const app = express();
-app.use(cors({ origin: true, credentials: true }));
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
-app.use((_req, _res, next) => { ensureDb().then(next).catch(next); });
-
-// Health / diagnostics — never cache this response
-async function healthHandler(_req: Request, res: Response) {
-  res.set("Cache-Control", "no-store, no-cache, must-revalidate");
-  res.set("Pragma", "no-cache");
-  const dbUrl = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL;
-  const dbConfigured = !!dbUrl;
-  let dbConnected = false;
-  let dbError = "";
-  if (dbConfigured) {
-    try {
-      await pool.query("SELECT 1");
-      dbConnected = true;
-    } catch (e: any) {
-      dbError = e.message;
-    }
-  }
-  res.json({
-    ok: dbConnected,
-    db: dbConfigured ? (dbConnected ? "connected" : "error") : "missing DATABASE_URL",
-    dbError: dbError || undefined,
-    ts: Date.now(),
-  });
-}
-app.get("/api/health", healthHandler);
-app.post("/api/health", healthHandler); // POST is never CDN-cached
-
-// ── Auth routes ───────────────────────────────────────────────────────────────
-app.post("/api/auth/register", async (req, res) => {
+router.post("/auth/register", async (req, res) => {
   try {
     const { username, password, name, age, gender, height, weight, targetWeight, activityLevel, goal } = req.body;
     if (!username?.trim() || !password || password.length < 4) {
@@ -257,7 +217,7 @@ app.post("/api/auth/register", async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: "Registration failed" }); }
 });
 
-app.post("/api/auth/login", async (req, res) => {
+router.post("/auth/login", async (req, res) => {
   try {
     const { username, password } = req.body;
     if (!username?.trim() || !password) { res.status(400).json({ error: "Username and password required" }); return; }
@@ -270,7 +230,7 @@ app.post("/api/auth/login", async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: "Login failed" }); }
 });
 
-app.post("/api/auth/change-password", requireAuth, async (req: AuthRequest, res) => {
+router.post("/auth/change-password", requireAuth, async (req: AuthRequest, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
     if (!currentPassword || !newPassword || newPassword.length < 4) {
@@ -285,8 +245,7 @@ app.post("/api/auth/change-password", requireAuth, async (req: AuthRequest, res)
   } catch { res.status(500).json({ error: "Failed to change password" }); }
 });
 
-// ── Profile routes ────────────────────────────────────────────────────────────
-app.get("/api/profile", requireAuth, async (req: AuthRequest, res) => {
+router.get("/profile", requireAuth, async (req: AuthRequest, res) => {
   try {
     const [profile] = await db.select().from(userProfiles).where(eq(userProfiles.userId, req.userId!)).limit(1);
     if (!profile) { res.status(404).json({ error: "Profile not found" }); return; }
@@ -295,7 +254,7 @@ app.get("/api/profile", requireAuth, async (req: AuthRequest, res) => {
   } catch { res.status(500).json({ error: "Failed to fetch profile" }); }
 });
 
-app.put("/api/profile", requireAuth, async (req: AuthRequest, res) => {
+router.put("/profile", requireAuth, async (req: AuthRequest, res) => {
   try {
     const { name, age, gender, height, weight, targetWeight, activityLevel, goal, dailyCalorieGoal, profilePhoto, stepGoal, theme } = req.body;
     const [updated] = await db.update(userProfiles).set({
@@ -317,8 +276,7 @@ app.put("/api/profile", requireAuth, async (req: AuthRequest, res) => {
   } catch { res.status(500).json({ error: "Failed to update profile" }); }
 });
 
-// ── Food logs ─────────────────────────────────────────────────────────────────
-app.get("/api/food-logs", requireAuth, async (req: AuthRequest, res) => {
+router.get("/food-logs", requireAuth, async (req: AuthRequest, res) => {
   try {
     const { date } = req.query as { date?: string };
     const conds = [eq(foodLogs.userId, req.userId!)];
@@ -327,7 +285,7 @@ app.get("/api/food-logs", requireAuth, async (req: AuthRequest, res) => {
   } catch { res.status(500).json({ error: "Failed to fetch food logs" }); }
 });
 
-app.post("/api/food-logs", requireAuth, async (req: AuthRequest, res) => {
+router.post("/food-logs", requireAuth, async (req: AuthRequest, res) => {
   try {
     const { date, name, calories, protein, carbs, fat, fiber } = req.body;
     const [row] = await db.insert(foodLogs).values({
@@ -339,21 +297,20 @@ app.post("/api/food-logs", requireAuth, async (req: AuthRequest, res) => {
   } catch { res.status(500).json({ error: "Failed to add food log" }); }
 });
 
-app.delete("/api/food-logs/:id", requireAuth, async (req: AuthRequest, res) => {
+router.delete("/food-logs/:id", requireAuth, async (req: AuthRequest, res) => {
   try {
     await db.delete(foodLogs).where(and(eq(foodLogs.id, Number(req.params.id)), eq(foodLogs.userId, req.userId!)));
     res.json({ ok: true });
   } catch { res.status(500).json({ error: "Failed to delete food log" }); }
 });
 
-// ── Workout logs ──────────────────────────────────────────────────────────────
-app.get("/api/workout-logs", requireAuth, async (req: AuthRequest, res) => {
+router.get("/workout-logs", requireAuth, async (req: AuthRequest, res) => {
   try {
     res.json(await db.select().from(workoutLogs).where(eq(workoutLogs.userId, req.userId!)).orderBy(workoutLogs.createdAt));
   } catch { res.status(500).json({ error: "Failed to fetch workout logs" }); }
 });
 
-app.post("/api/workout-logs", requireAuth, async (req: AuthRequest, res) => {
+router.post("/workout-logs", requireAuth, async (req: AuthRequest, res) => {
   try {
     const { date, exercise, sets, reps, weight, unit, notes } = req.body;
     const [row] = await db.insert(workoutLogs).values({
@@ -365,21 +322,20 @@ app.post("/api/workout-logs", requireAuth, async (req: AuthRequest, res) => {
   } catch { res.status(500).json({ error: "Failed to add workout log" }); }
 });
 
-app.delete("/api/workout-logs/:id", requireAuth, async (req: AuthRequest, res) => {
+router.delete("/workout-logs/:id", requireAuth, async (req: AuthRequest, res) => {
   try {
     await db.delete(workoutLogs).where(and(eq(workoutLogs.id, Number(req.params.id)), eq(workoutLogs.userId, req.userId!)));
     res.json({ ok: true });
   } catch { res.status(500).json({ error: "Failed to delete workout log" }); }
 });
 
-// ── Steps ─────────────────────────────────────────────────────────────────────
-app.get("/api/steps", requireAuth, async (req: AuthRequest, res) => {
+router.get("/steps", requireAuth, async (req: AuthRequest, res) => {
   try {
     res.json(await db.select().from(stepEntries).where(eq(stepEntries.userId, req.userId!)).orderBy(stepEntries.date));
   } catch { res.status(500).json({ error: "Failed to fetch steps" }); }
 });
 
-app.post("/api/steps", requireAuth, async (req: AuthRequest, res) => {
+router.post("/steps", requireAuth, async (req: AuthRequest, res) => {
   try {
     const { date, steps } = req.body;
     const d = date ?? new Date().toISOString().split("T")[0];
@@ -395,14 +351,13 @@ app.post("/api/steps", requireAuth, async (req: AuthRequest, res) => {
   } catch { res.status(500).json({ error: "Failed to save steps" }); }
 });
 
-// ── Measurements ──────────────────────────────────────────────────────────────
-app.get("/api/measurements", requireAuth, async (req: AuthRequest, res) => {
+router.get("/measurements", requireAuth, async (req: AuthRequest, res) => {
   try {
     res.json(await db.select().from(measurements).where(eq(measurements.userId, req.userId!)).orderBy(measurements.date));
   } catch { res.status(500).json({ error: "Failed to fetch measurements" }); }
 });
 
-app.post("/api/measurements", requireAuth, async (req: AuthRequest, res) => {
+router.post("/measurements", requireAuth, async (req: AuthRequest, res) => {
   try {
     const { date, chest, waist, hips, leftArm, rightArm, leftThigh, rightThigh, shoulders, neck, notes } = req.body;
     const [row] = await db.insert(measurements).values({
@@ -416,15 +371,14 @@ app.post("/api/measurements", requireAuth, async (req: AuthRequest, res) => {
   } catch { res.status(500).json({ error: "Failed to add measurement" }); }
 });
 
-app.delete("/api/measurements/:id", requireAuth, async (req: AuthRequest, res) => {
+router.delete("/measurements/:id", requireAuth, async (req: AuthRequest, res) => {
   try {
     await db.delete(measurements).where(and(eq(measurements.id, Number(req.params.id)), eq(measurements.userId, req.userId!)));
     res.json({ ok: true });
   } catch { res.status(500).json({ error: "Failed to delete measurement" }); }
 });
 
-// ── Daily logs ────────────────────────────────────────────────────────────────
-app.get("/api/daily-logs", requireAuth, async (req: AuthRequest, res) => {
+router.get("/daily-logs", requireAuth, async (req: AuthRequest, res) => {
   try {
     const d = (req.query.date as string) ?? new Date().toISOString().split("T")[0];
     const [row] = await db.select().from(dailyLogs).where(and(eq(dailyLogs.userId, req.userId!), eq(dailyLogs.date, d))).limit(1);
@@ -432,7 +386,7 @@ app.get("/api/daily-logs", requireAuth, async (req: AuthRequest, res) => {
   } catch { res.status(500).json({ error: "Failed to fetch daily log" }); }
 });
 
-app.post("/api/daily-logs", requireAuth, async (req: AuthRequest, res) => {
+router.post("/daily-logs", requireAuth, async (req: AuthRequest, res) => {
   try {
     const { date, water, sleep } = req.body;
     const d = date ?? new Date().toISOString().split("T")[0];
@@ -450,12 +404,4 @@ app.post("/api/daily-logs", requireAuth, async (req: AuthRequest, res) => {
   } catch { res.status(500).json({ error: "Failed to update daily log" }); }
 });
 
-// ── Global JSON error handler (must be last) ──────────────────────────────────
-// Without this, Express returns HTML on errors → frontend can't parse → "Request failed"
-app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-  console.error("[API Error]", err?.message ?? err);
-  const status = typeof err?.status === "number" ? err.status : 500;
-  res.status(status).json({ error: err?.message ?? "Internal server error" });
-});
-
-export default app;
+export default router;

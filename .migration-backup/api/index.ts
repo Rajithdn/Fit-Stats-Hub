@@ -93,8 +93,97 @@ const dailyLogs = pgTable("daily_logs", {
 
 // ── DB ────────────────────────────────────────────────────────────────────────
 const { Pool } = pg;
-const pool = new Pool({ connectionString: process.env.NEON_DATABASE_URL || process.env.DATABASE_URL });
+const dbUrl = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL;
+if (!dbUrl) throw new Error("No DATABASE_URL or NEON_DATABASE_URL set");
+const pool = new Pool({ connectionString: dbUrl, ssl: { rejectUnauthorized: false } });
 const db = drizzle(pool);
+
+// Auto-create tables on first request (needed for Vercel / fresh databases)
+let dbReady = false;
+async function ensureDb() {
+  if (dbReady) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      username TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS user_profiles (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      name TEXT DEFAULT '' NOT NULL,
+      age INTEGER DEFAULT 25 NOT NULL,
+      gender TEXT DEFAULT 'male' NOT NULL,
+      height NUMERIC DEFAULT 170 NOT NULL,
+      weight NUMERIC DEFAULT 70 NOT NULL,
+      target_weight NUMERIC DEFAULT 65 NOT NULL,
+      activity_level TEXT DEFAULT 'Moderately Active' NOT NULL,
+      goal TEXT DEFAULT 'Weight Loss' NOT NULL,
+      daily_calorie_goal INTEGER DEFAULT 2000 NOT NULL,
+      profile_photo TEXT DEFAULT '' NOT NULL,
+      step_goal INTEGER DEFAULT 10000 NOT NULL,
+      theme TEXT DEFAULT 'dark' NOT NULL,
+      updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS food_logs (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      date DATE NOT NULL,
+      name TEXT NOT NULL,
+      calories INTEGER DEFAULT 0 NOT NULL,
+      protein NUMERIC DEFAULT 0 NOT NULL,
+      carbs NUMERIC DEFAULT 0 NOT NULL,
+      fat NUMERIC DEFAULT 0 NOT NULL,
+      fiber NUMERIC DEFAULT 0 NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS workout_logs (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      date DATE NOT NULL,
+      exercise TEXT NOT NULL,
+      sets INTEGER DEFAULT 1 NOT NULL,
+      reps INTEGER DEFAULT 1 NOT NULL,
+      weight NUMERIC DEFAULT 0 NOT NULL,
+      unit TEXT DEFAULT 'kg' NOT NULL,
+      notes TEXT DEFAULT '' NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS step_entries (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      date DATE NOT NULL,
+      steps INTEGER DEFAULT 0 NOT NULL,
+      UNIQUE(user_id, date)
+    );
+    CREATE TABLE IF NOT EXISTS measurements (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      date DATE NOT NULL,
+      chest NUMERIC DEFAULT 0 NOT NULL,
+      waist NUMERIC DEFAULT 0 NOT NULL,
+      hips NUMERIC DEFAULT 0 NOT NULL,
+      left_arm NUMERIC DEFAULT 0 NOT NULL,
+      right_arm NUMERIC DEFAULT 0 NOT NULL,
+      left_thigh NUMERIC DEFAULT 0 NOT NULL,
+      right_thigh NUMERIC DEFAULT 0 NOT NULL,
+      shoulders NUMERIC DEFAULT 0 NOT NULL,
+      neck NUMERIC DEFAULT 0 NOT NULL,
+      notes TEXT DEFAULT '' NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS daily_logs (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      date DATE NOT NULL,
+      water NUMERIC DEFAULT 0 NOT NULL,
+      sleep NUMERIC DEFAULT 0 NOT NULL,
+      UNIQUE(user_id, date)
+    );
+  `);
+  dbReady = true;
+}
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 const JWT_SECRET = process.env.JWT_SECRET || "termfit-jwt-secret-dev-only";
@@ -118,9 +207,33 @@ const app = express();
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use((_req, _res, next) => { ensureDb().then(next).catch(next); });
 
-// Health
-app.get("/api/health", (_req, res) => res.json({ ok: true }));
+// Health / diagnostics — never cache this response
+async function healthHandler(_req: Request, res: Response) {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.set("Pragma", "no-cache");
+  const dbUrl = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL;
+  const dbConfigured = !!dbUrl;
+  let dbConnected = false;
+  let dbError = "";
+  if (dbConfigured) {
+    try {
+      await pool.query("SELECT 1");
+      dbConnected = true;
+    } catch (e: any) {
+      dbError = e.message;
+    }
+  }
+  res.json({
+    ok: dbConnected,
+    db: dbConfigured ? (dbConnected ? "connected" : "error") : "missing DATABASE_URL",
+    dbError: dbError || undefined,
+    ts: Date.now(),
+  });
+}
+app.get("/api/health", healthHandler);
+app.post("/api/health", healthHandler); // POST is never CDN-cached
 
 // ── Auth routes ───────────────────────────────────────────────────────────────
 app.post("/api/auth/register", async (req, res) => {
@@ -335,6 +448,14 @@ app.post("/api/daily-logs", requireAuth, async (req: AuthRequest, res) => {
       res.status(201).json(row);
     }
   } catch { res.status(500).json({ error: "Failed to update daily log" }); }
+});
+
+// ── Global JSON error handler (must be last) ──────────────────────────────────
+// Without this, Express returns HTML on errors → frontend can't parse → "Request failed"
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  console.error("[API Error]", err?.message ?? err);
+  const status = typeof err?.status === "number" ? err.status : 500;
+  res.status(status).json({ error: err?.message ?? "Internal server error" });
 });
 
 export default app;
