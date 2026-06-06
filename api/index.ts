@@ -207,8 +207,10 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use((_req, _res, next) => { ensureDb().then(next).catch(next); });
 
-// Health / diagnostics
-app.get("/api/health", async (_req, res) => {
+// Health / diagnostics — never cache this response
+async function healthHandler(_req: Request, res: Response) {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.set("Pragma", "no-cache");
   const dbUrl = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL;
   const dbConfigured = !!dbUrl;
   let dbConnected = false;
@@ -225,8 +227,11 @@ app.get("/api/health", async (_req, res) => {
     ok: dbConnected,
     db: dbConfigured ? (dbConnected ? "connected" : "error") : "missing DATABASE_URL",
     dbError: dbError || undefined,
+    ts: Date.now(),
   });
-});
+}
+app.get("/api/health", healthHandler);
+app.post("/api/health", healthHandler); // POST is never CDN-cached
 
 // ── Auth routes ───────────────────────────────────────────────────────────────
 app.post("/api/auth/register", async (req, res) => {
