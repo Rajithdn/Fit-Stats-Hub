@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from "react";
+import { signOut } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 import { useStore } from "@/store/useStore";
 import { Bell, Moon, Sun, Menu, Settings, LogOut, User, CheckCheck, Dumbbell, Apple, Droplets, Footprints } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, type Variants } from "framer-motion";
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -27,7 +29,7 @@ function useClickOutside(ref: React.RefObject<HTMLElement | null>, handler: () =
 }
 
 export function Header({ onMenuClick }: HeaderProps) {
-  const { userProfile, profilePhoto, username, theme, setTheme, setActiveSection, logout } = useStore();
+  const { userProfile, profilePhoto, email, theme, setTheme, setActiveSection, logout } = useStore();
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [readAll, setReadAll] = useState(false);
@@ -46,11 +48,11 @@ export function Header({ onMenuClick }: HeaderProps) {
 
   const initials = userProfile.name
     ? userProfile.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2)
-    : username?.[0]?.toUpperCase() || "?";
+    : email?.[0]?.toUpperCase() || "?";
 
-  const dropdownVariants = {
+  const dropdownVariants: Variants = {
     hidden: { opacity: 0, scale: 0.95, y: -8 },
-    visible: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.15, ease: "easeOut" } },
+    visible: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.15, ease: "easeOut" as const } },
     exit: { opacity: 0, scale: 0.95, y: -8, transition: { duration: 0.1 } },
   };
 
@@ -151,7 +153,7 @@ export function Header({ onMenuClick }: HeaderProps) {
               )}
             </div>
             <span className="text-sm font-medium hidden sm:inline-block max-w-[100px] truncate">
-              {userProfile.name || username}
+              {userProfile.name || email}
             </span>
           </button>
 
@@ -176,7 +178,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-semibold truncate">{userProfile.name || "Set your name"}</p>
-                      <p className="text-xs text-muted-foreground truncate">@{username}</p>
+                      <p className="text-xs text-muted-foreground truncate">{email}</p>
                     </div>
                   </div>
                 </div>
@@ -201,7 +203,7 @@ export function Header({ onMenuClick }: HeaderProps) {
 
                 <div className="p-1.5 border-t border-border/60">
                   <button
-                    onClick={() => { logout(); setProfileOpen(false); }}
+                    onClick={() => { setProfileOpen(false); logout(); signOut(auth).catch(console.error); }}
                     className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-red-400 hover:bg-red-400/10 transition-colors"
                   >
                     <LogOut className="w-4 h-4" />

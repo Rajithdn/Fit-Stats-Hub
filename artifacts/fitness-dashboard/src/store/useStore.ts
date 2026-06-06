@@ -1,5 +1,21 @@
 import { create } from 'zustand';
-import { apiFetch, setToken, clearToken, today, isRealId } from '@/lib/api';
+import { today } from '@/lib/api';
+import {
+  setProfile,
+  getTodayFoodLogs,
+  addFoodLog,
+  deleteFoodLog,
+  getWorkoutLogs,
+  addWorkoutLog as fbAddWorkoutLog,
+  deleteWorkoutLog,
+  getStepEntries,
+  setStepEntry,
+  getMeasurements,
+  addMeasurement as fbAddMeasurement,
+  deleteMeasurement,
+  getDailyLog,
+  setDailyLog,
+} from '@/lib/firebaseDb';
 
 export type UserProfile = {
   name: string;
@@ -57,15 +73,14 @@ export type MeasurementEntry = {
 
 export type DailyLog = {
   foods: FoodEntry[];
-  workouts: any[];
+  workouts: unknown[];
   water: number;
   sleep: number;
 };
 
 type StoreState = {
-  token: string | null;
-  username: string;
-  userId: number | null;
+  uid: string | null;
+  email: string;
   isAuthenticated: boolean;
   isLoading: boolean;
   profilePhoto: string;
@@ -78,15 +93,15 @@ type StoreState = {
   theme: 'dark' | 'light';
   activeSection: string;
 
-  login: (token: string, username: string, userId: number) => void;
+  login: (uid: string, email: string) => void;
   logout: () => void;
   setLoading: (v: boolean) => void;
   loadUserData: (data: {
-    profile: any;
-    foodLogs: any[];
-    workoutLogs: any[];
-    stepEntries: any[];
-    measurements: any[];
+    profile: Record<string, unknown> | null;
+    foodLogs: FoodEntry[];
+    workoutLogs: WorkoutLogEntry[];
+    stepEntries: StepEntry[];
+    measurements: MeasurementEntry[];
     dailyLog: { water: number; sleep: number };
   }) => void;
 
@@ -123,226 +138,193 @@ function parseNum(v: unknown): number {
   return isNaN(n) ? 0 : n;
 }
 
-function mapProfile(p: any): { profile: UserProfile; photo: string; stepGoal: number; theme: 'dark' | 'light' } {
+function mapProfile(p: Record<string, unknown>): {
+  profile: UserProfile;
+  photo: string;
+  stepGoal: number;
+  theme: 'dark' | 'light';
+} {
   return {
     profile: {
-      name: p.name ?? '',
+      name: (p.name as string) ?? '',
       age: parseNum(p.age),
-      gender: (p.gender ?? 'male') as UserProfile['gender'],
+      gender: ((p.gender as string) ?? 'male') as UserProfile['gender'],
       height: parseNum(p.height),
       weight: parseNum(p.weight),
       targetWeight: parseNum(p.targetWeight),
-      activityLevel: (p.activityLevel ?? 'Moderately Active') as UserProfile['activityLevel'],
-      goal: (p.goal ?? 'Weight Loss') as UserProfile['goal'],
+      activityLevel: ((p.activityLevel as string) ?? 'Moderately Active') as UserProfile['activityLevel'],
+      goal: ((p.goal as string) ?? 'Weight Loss') as UserProfile['goal'],
       dailyCalorieGoal: parseNum(p.dailyCalorieGoal),
     },
-    photo: p.profilePhoto ?? '',
+    photo: (p.profilePhoto as string) ?? '',
     stepGoal: parseNum(p.stepGoal) || 10000,
-    theme: (p.theme ?? 'dark') as 'dark' | 'light',
+    theme: ((p.theme as string) ?? 'dark') as 'dark' | 'light',
   };
 }
 
-export const useStore = create<StoreState>()((set, get) => ({
-  token: null,
-  username: '',
-  userId: null,
+const RESET = {
+  uid: null as string | null,
+  email: '',
   isAuthenticated: false,
-  isLoading: true,
+  isLoading: false,
   profilePhoto: '',
   userProfile: BLANK_PROFILE,
-  dailyLog: { foods: [], workouts: [], water: 0, sleep: 0 },
-  workoutLogs: [],
-  stepEntries: [],
+  dailyLog: { foods: [] as FoodEntry[], workouts: [] as unknown[], water: 0, sleep: 0 },
+  workoutLogs: [] as WorkoutLogEntry[],
+  stepEntries: [] as StepEntry[],
   stepGoal: 10000,
-  measurements: [],
-  theme: 'dark',
+  measurements: [] as MeasurementEntry[],
+  theme: 'dark' as 'dark' | 'light',
   activeSection: 'Dashboard',
+};
 
-  login: (token, username, userId) => {
-    setToken(token);
-    set({ token, username, userId, isAuthenticated: true });
-  },
+export const useStore = create<StoreState>()((set, get) => ({
+  ...RESET,
+  isLoading: true,
 
-  logout: () => {
-    clearToken();
-    set({
-      token: null, username: '', userId: null, isAuthenticated: false,
-      profilePhoto: '', userProfile: BLANK_PROFILE,
-      dailyLog: { foods: [], workouts: [], water: 0, sleep: 0 },
-      workoutLogs: [], stepEntries: [], measurements: [],
-    });
-  },
+  login: (uid, email) => set({ uid, email, isAuthenticated: true }),
+
+  logout: () => set({ ...RESET }),
 
   setLoading: (v) => set({ isLoading: v }),
 
   loadUserData: ({ profile, foodLogs, workoutLogs, stepEntries, measurements, dailyLog }) => {
-    const { profile: up, photo, stepGoal, theme } = mapProfile(profile);
+    if (profile) {
+      const { profile: up, photo, stepGoal, theme } = mapProfile(profile);
+      set({ userProfile: up, profilePhoto: photo, stepGoal, theme });
+    }
     set({
-      userProfile: up,
-      profilePhoto: photo,
-      stepGoal,
-      theme,
       dailyLog: {
-        foods: foodLogs.map((f: any) => ({
-          id: String(f.id),
-          name: f.name,
-          calories: parseNum(f.calories),
-          protein: parseNum(f.protein),
-          carbs: parseNum(f.carbs),
-          fat: parseNum(f.fat),
-          fiber: parseNum(f.fiber),
-        })),
+        foods: foodLogs,
         workouts: [],
         water: parseNum(dailyLog.water),
         sleep: parseNum(dailyLog.sleep),
       },
-      workoutLogs: workoutLogs.map((w: any) => ({
-        id: String(w.id),
-        date: w.date,
-        exercise: w.exercise,
-        sets: parseNum(w.sets),
-        reps: parseNum(w.reps),
-        weight: parseNum(w.weight),
-        unit: w.unit ?? 'kg',
-        notes: w.notes ?? '',
-      })),
-      stepEntries: stepEntries.map((s: any) => ({
-        id: String(s.id),
-        date: s.date,
-        steps: parseNum(s.steps),
-      })),
-      measurements: measurements.map((m: any) => ({
-        id: String(m.id),
-        date: m.date,
-        chest: parseNum(m.chest),
-        waist: parseNum(m.waist),
-        hips: parseNum(m.hips),
-        leftArm: parseNum(m.leftArm),
-        rightArm: parseNum(m.rightArm),
-        leftThigh: parseNum(m.leftThigh),
-        rightThigh: parseNum(m.rightThigh),
-        shoulders: parseNum(m.shoulders),
-        neck: parseNum(m.neck),
-        notes: m.notes ?? '',
-      })),
+      workoutLogs,
+      stepEntries,
+      measurements,
     });
   },
 
   updateProfile: (profile) => {
-    set((state) => ({ userProfile: { ...state.userProfile, ...profile } }));
-    apiFetch('/api/profile', { method: 'PUT', body: JSON.stringify(profile) }).catch(console.error);
+    set((s) => ({ userProfile: { ...s.userProfile, ...profile } }));
+    const { uid } = get();
+    if (uid) setProfile(uid, profile as Record<string, unknown>).catch(console.error);
   },
 
   setProfilePhoto: (photo) => {
     set({ profilePhoto: photo });
-    apiFetch('/api/profile', { method: 'PUT', body: JSON.stringify({ profilePhoto: photo }) }).catch(console.error);
+    const { uid } = get();
+    if (uid) setProfile(uid, { profilePhoto: photo }).catch(console.error);
   },
 
   updateDailyLog: (log) => {
-    set((state) => ({ dailyLog: { ...state.dailyLog, ...log } }));
-    const { water, sleep } = { ...get().dailyLog, ...log };
-    const patch: Record<string, number> = {};
-    if (log.water !== undefined) patch.water = water;
-    if (log.sleep !== undefined) patch.sleep = sleep;
-    if (Object.keys(patch).length > 0) {
-      apiFetch('/api/daily-logs', { method: 'POST', body: JSON.stringify({ date: today(), ...patch }) }).catch(console.error);
-    }
+    set((s) => ({ dailyLog: { ...s.dailyLog, ...log } }));
+    const { uid } = get();
+    if (!uid) return;
+    const patch: Partial<{ water: number; sleep: number }> = {};
+    if (log.water !== undefined) patch.water = log.water;
+    if (log.sleep !== undefined) patch.sleep = log.sleep;
+    if (Object.keys(patch).length > 0) setDailyLog(uid, today(), patch).catch(console.error);
   },
 
   addFoodToLog: (food) => {
     const tempId = `tmp-${Date.now()}`;
-    set((state) => ({
-      dailyLog: { ...state.dailyLog, foods: [...state.dailyLog.foods, { ...food, id: tempId }] },
-    }));
-    apiFetch<{ id: number }>('/api/food-logs', {
-      method: 'POST',
-      body: JSON.stringify({ ...food, date: today() }),
-    }).then((row) => {
-      set((state) => ({
-        dailyLog: {
-          ...state.dailyLog,
-          foods: state.dailyLog.foods.map((f) => f.id === tempId ? { ...f, id: String(row.id) } : f),
-        },
+    set((s) => ({ dailyLog: { ...s.dailyLog, foods: [...s.dailyLog.foods, { ...food, id: tempId }] } }));
+    const { uid } = get();
+    if (!uid) return;
+    addFoodLog(uid, { ...food, date: today() }).then((id) => {
+      set((s) => ({
+        dailyLog: { ...s.dailyLog, foods: s.dailyLog.foods.map((f) => (f.id === tempId ? { ...f, id } : f)) },
       }));
     }).catch(console.error);
   },
 
   removeFoodFromLog: (id) => {
-    set((state) => ({
-      dailyLog: { ...state.dailyLog, foods: state.dailyLog.foods.filter((f) => f.id !== id) },
-    }));
-    if (isRealId(id)) {
-      apiFetch(`/api/food-logs/${id}`, { method: 'DELETE' }).catch(console.error);
-    }
+    set((s) => ({ dailyLog: { ...s.dailyLog, foods: s.dailyLog.foods.filter((f) => f.id !== id) } }));
+    const { uid } = get();
+    if (uid && !id.startsWith('tmp-')) deleteFoodLog(uid, id).catch(console.error);
   },
 
   addWorkoutLog: (entry) => {
     const tempId = `tmp-${Date.now()}`;
-    set((state) => ({ workoutLogs: [{ ...entry, id: tempId }, ...state.workoutLogs] }));
-    apiFetch<{ id: number }>('/api/workout-logs', {
-      method: 'POST',
-      body: JSON.stringify(entry),
-    }).then((row) => {
-      set((state) => ({
-        workoutLogs: state.workoutLogs.map((w) => w.id === tempId ? { ...w, id: String(row.id) } : w),
-      }));
+    set((s) => ({ workoutLogs: [{ ...entry, id: tempId }, ...s.workoutLogs] }));
+    const { uid } = get();
+    if (!uid) return;
+    const { id: _id, ...rest } = entry;
+    fbAddWorkoutLog(uid, rest).then((id) => {
+      set((s) => ({ workoutLogs: s.workoutLogs.map((w) => (w.id === tempId ? { ...w, id } : w)) }));
     }).catch(console.error);
   },
 
   removeWorkoutLog: (id) => {
-    set((state) => ({ workoutLogs: state.workoutLogs.filter((e) => e.id !== id) }));
-    if (isRealId(id)) {
-      apiFetch(`/api/workout-logs/${id}`, { method: 'DELETE' }).catch(console.error);
-    }
+    set((s) => ({ workoutLogs: s.workoutLogs.filter((e) => e.id !== id) }));
+    const { uid } = get();
+    if (uid && !id.startsWith('tmp-')) deleteWorkoutLog(uid, id).catch(console.error);
   },
 
   updateStepEntry: (date, steps) => {
-    set((state) => {
-      const idx = state.stepEntries.findIndex((e) => e.date === date);
+    set((s) => {
+      const idx = s.stepEntries.findIndex((e) => e.date === date);
       if (idx >= 0) {
-        const updated = [...state.stepEntries];
+        const updated = [...s.stepEntries];
         updated[idx] = { ...updated[idx], steps };
         return { stepEntries: updated };
       }
-      return { stepEntries: [{ date, steps }, ...state.stepEntries] };
+      return { stepEntries: [{ date, steps }, ...s.stepEntries] };
     });
-    apiFetch('/api/steps', { method: 'POST', body: JSON.stringify({ date, steps }) }).catch(console.error);
+    const { uid } = get();
+    if (uid) setStepEntry(uid, date, steps).catch(console.error);
   },
 
   setStepGoal: (goal) => {
     set({ stepGoal: goal });
-    apiFetch('/api/profile', { method: 'PUT', body: JSON.stringify({ stepGoal: goal }) }).catch(console.error);
+    const { uid } = get();
+    if (uid) setProfile(uid, { stepGoal: goal }).catch(console.error);
   },
 
   addMeasurement: (entry) => {
     const tempId = `tmp-${Date.now()}`;
-    set((state) => ({ measurements: [{ ...entry, id: tempId }, ...state.measurements] }));
-    apiFetch<{ id: number }>('/api/measurements', {
-      method: 'POST',
-      body: JSON.stringify(entry),
-    }).then((row) => {
-      set((state) => ({
-        measurements: state.measurements.map((m) => m.id === tempId ? { ...m, id: String(row.id) } : m),
-      }));
+    set((s) => ({ measurements: [{ ...entry, id: tempId }, ...s.measurements] }));
+    const { uid } = get();
+    if (!uid) return;
+    const { id: _id, ...rest } = entry;
+    fbAddMeasurement(uid, rest).then((id) => {
+      set((s) => ({ measurements: s.measurements.map((m) => (m.id === tempId ? { ...m, id } : m)) }));
     }).catch(console.error);
   },
 
   removeMeasurement: (id) => {
-    set((state) => ({ measurements: state.measurements.filter((m) => m.id !== id) }));
-    if (isRealId(id)) {
-      apiFetch(`/api/measurements/${id}`, { method: 'DELETE' }).catch(console.error);
-    }
+    set((s) => ({ measurements: s.measurements.filter((m) => m.id !== id) }));
+    const { uid } = get();
+    if (uid && !id.startsWith('tmp-')) deleteMeasurement(uid, id).catch(console.error);
   },
 
   setTheme: (theme) => {
     set({ theme });
-    apiFetch('/api/profile', { method: 'PUT', body: JSON.stringify({ theme }) }).catch(console.error);
+    const { uid } = get();
+    if (uid) setProfile(uid, { theme }).catch(console.error);
   },
 
   setActiveSection: (section) => set({ activeSection: section }),
 
   completeOnboarding: (profile) => {
     set({ userProfile: profile });
-    apiFetch('/api/profile', { method: 'PUT', body: JSON.stringify(profile) }).catch(console.error);
+    const { uid } = get();
+    if (uid) setProfile(uid, profile as unknown as Record<string, unknown>).catch(console.error);
   },
 }));
+
+// Helper: load all user data from Firestore after sign-in
+export async function fetchAndLoadUserData(uid: string) {
+  const t = today();
+  const [profile, foodLogs, workoutLogs, stepEntries, measurements, dailyLog] = await Promise.all([
+    import('@/lib/firebaseDb').then((m) => m.getProfile(uid)),
+    getTodayFoodLogs(uid, t),
+    getWorkoutLogs(uid),
+    getStepEntries(uid),
+    getMeasurements(uid),
+    getDailyLog(uid, t),
+  ]);
+  return { profile, foodLogs, workoutLogs, stepEntries, measurements, dailyLog };
+}

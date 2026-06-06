@@ -37,7 +37,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onNavClick }: SidebarProps) {
-  const { activeSection, setActiveSection, userProfile, profilePhoto, username } = useStore();
+  const { activeSection, setActiveSection, userProfile, profilePhoto, email } = useStore();
 
   const initials = userProfile.name
     .split(" ")
@@ -73,11 +73,11 @@ export function Sidebar({ onNavClick }: SidebarProps) {
             {profilePhoto ? (
               <img src={profilePhoto} alt="Profile" className="w-full h-full object-cover" />
             ) : (
-              <span className="text-sm font-bold text-primary">{initials || username?.[0]?.toUpperCase() || "?"}</span>
+              <span className="text-sm font-bold text-primary">{initials || email?.[0]?.toUpperCase() || "?"}</span>
             )}
           </div>
           <div className="min-w-0 text-left">
-            <p className="text-sm font-semibold truncate">{userProfile.name || `@${username}`}</p>
+            <p className="text-sm font-semibold truncate">{userProfile.name || email || "Set up profile"}</p>
             <p className="text-xs text-muted-foreground truncate">{userProfile.goal || "Set up your profile"}</p>
           </div>
         </button>
@@ -118,10 +118,10 @@ export function Sidebar({ onNavClick }: SidebarProps) {
       </nav>
 
       <div className="px-3 pb-2">
-        {username && (
+        {email && (
           <div className="px-3 py-2 rounded-lg bg-card border border-border/50 text-xs text-muted-foreground flex items-center gap-2">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-            <span className="truncate">@{username}</span>
+            <span className="truncate">{email}</span>
           </div>
         )}
       </div>

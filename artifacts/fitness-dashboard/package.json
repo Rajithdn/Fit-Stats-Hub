@@ -75,6 +75,7 @@
     "zod": "catalog:"
   },
   "dependencies": {
+    "firebase": "^12.14.0",
     "zustand": "^5.0.14"
   }
 }
