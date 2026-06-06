@@ -1,0 +1,5 @@
+{
+  "buildCommand": "pnpm install && pnpm --filter @workspace/fitness-dashboard run build",
+  "outputDirectory": "artifacts/fitness-dashboard/dist/public",
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+}

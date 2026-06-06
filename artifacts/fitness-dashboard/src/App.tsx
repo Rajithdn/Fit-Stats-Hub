@@ -1,5 +1,7 @@
 import { useEffect } from "react";
-import { useStore, fetchAndLoadUserData, getToken, TOKEN_KEY } from "@/store/useStore";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "@/lib/firebase";
+import { useStore, fetchAndLoadUserData } from "@/store/useStore";
 import { Dashboard } from "@/components/sections/Dashboard";
 import { Nutrition } from "@/components/sections/Nutrition";
 import { DietPlanner } from "@/components/sections/DietPlanner";
@@ -21,30 +23,28 @@ export default function App() {
   const { activeSection, theme, isAuthenticated, isLoading, login, loadUserData, setLoading, logout } = useStore();
 
   useEffect(() => {
-    const token = getToken();
-    if (!token) {
-      setLoading(false);
-      return;
-    }
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!firebaseUser) {
+        logout();
+        setLoading(false);
+        return;
+      }
 
-    // Verify token by loading user data
-    (async () => {
       try {
-        // Decode userId/username from the JWT payload (base64 middle part)
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        login(String(payload.userId), payload.username ?? '');
+        const email = firebaseUser.email ?? "";
+        const username = email.replace(/@termfit\.app$/, "");
+        login(firebaseUser.uid, username);
 
-        const data = await fetchAndLoadUserData();
+        const data = await fetchAndLoadUserData(firebaseUser.uid);
         loadUserData(data);
       } catch {
-        // Token invalid or expired — clear it
-        localStorage.removeItem(TOKEN_KEY);
-        sessionStorage.removeItem(TOKEN_KEY);
         logout();
       } finally {
         setLoading(false);
       }
-    })();
+    });
+
+    return () => unsubscribe();
   }, []);
 
   if (isLoading) {
@@ -64,20 +64,20 @@ export default function App() {
 
   const renderSection = () => {
     switch (activeSection) {
-      case "Dashboard":         return <Dashboard />;
-      case "Nutrition":         return <Nutrition />;
-      case "Diet Planner":      return <DietPlanner />;
-      case "Workout Planner":   return <WorkoutPlanner />;
-      case "Workout Logger":    return <WorkoutLogger />;
-      case "Home Workout":      return <HomeWorkout />;
-      case "Daily Steps":       return <DailySteps />;
-      case "Body Measurements": return <BodyMeasurements />;
+      case "Dashboard":              return <Dashboard />;
+      case "Nutrition":              return <Nutrition />;
+      case "Diet Planner":           return <DietPlanner />;
+      case "Workout Planner":        return <WorkoutPlanner />;
+      case "Workout Logger":         return <WorkoutLogger />;
+      case "Home Workout":           return <HomeWorkout />;
+      case "Daily Steps":            return <DailySteps />;
+      case "Body Measurements":      return <BodyMeasurements />;
       case "Health Report Analyzer": return <HealthReportAnalyzer />;
-      case "Progress Tracker":  return <ProgressTracker />;
-      case "Progress Photos":   return <ProgressPhotos />;
-      case "AI Coach":          return <AICoach />;
-      case "Settings":          return <Settings />;
-      default:                  return <Dashboard />;
+      case "Progress Tracker":       return <ProgressTracker />;
+      case "Progress Photos":        return <ProgressPhotos />;
+      case "AI Coach":               return <AICoach />;
+      case "Settings":               return <Settings />;
+      default:                       return <Dashboard />;
     }
   };
 

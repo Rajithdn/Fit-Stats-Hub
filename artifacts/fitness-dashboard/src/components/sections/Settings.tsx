@@ -1,5 +1,7 @@
 import { useState, useRef } from "react";
-import { useStore, getToken, UserProfile } from "@/store/useStore";
+import { useStore, UserProfile } from "@/store/useStore";
+import { auth } from "@/lib/firebase";
+import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "firebase/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -86,20 +88,20 @@ export function Settings() {
     if (currentPw === newPw) { setPwError("New password must be different from current"); return; }
     setPwLoading(true);
     try {
-      const res = await fetch('/api/auth/change-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${getToken()}`,
-        },
-        body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setPwError(data.error ?? "Failed to change password"); return; }
+      const user = auth.currentUser;
+      if (!user || !user.email) { setPwError("Not signed in"); return; }
+      const credential = EmailAuthProvider.credential(user.email, currentPw);
+      await reauthenticateWithCredential(user, credential);
+      await updatePassword(user, newPw);
       setCurrentPw(""); setNewPw(""); setConfirmPw(""); setPwError("");
       toast({ title: "Password changed!", description: "Your password has been updated successfully." });
-    } catch {
-      setPwError("Network error — please try again");
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code ?? "";
+      if (code === "auth/wrong-password" || code === "auth/invalid-credential") {
+        setPwError("Current password is incorrect");
+      } else {
+        setPwError("Failed to change password — please try again");
+      }
     } finally {
       setPwLoading(false);
     }
