@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "ZgW8-tpPALAGA-fHhmYij"
+uri = "file://DEPLOYMENT.md"
+type = "text"
+title = "TermFit — Complete Deployment Guide (Vercel + Firebase)"

@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { useStore } from "@/store/useStore";
+import { useStore, getToken, UserProfile } from "@/store/useStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -7,16 +7,17 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { UserProfile } from "@/store/useStore";
-import { User, Target, Settings2, Camera, Trash2, ShieldCheck, Eye, EyeOff, Loader2, CheckCircle2 } from "lucide-react";
-import { getToken } from "@/store/useStore";
+import { User, Target, Settings2, Camera, Trash2, ShieldCheck, Eye, EyeOff, Loader2, CheckCircle2, FileDown } from "lucide-react";
+import { generateFitnessReport } from "@/lib/generateReport";
 
 export function Settings() {
-  const { userProfile, profilePhoto, theme, username, setTheme, updateProfile, setProfilePhoto } = useStore();
+  const { userProfile, profilePhoto, theme, username, setTheme, updateProfile, setProfilePhoto,
+          dailyLog, workoutLogs, stepEntries, measurements, stepGoal } = useStore();
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState<UserProfile>({ ...userProfile });
+  const [exporting, setExporting] = useState(false);
 
   // Change password state
   const [currentPw, setCurrentPw] = useState("");
@@ -54,6 +55,26 @@ export function Settings() {
   function handleRemovePhoto() {
     setProfilePhoto('');
     toast({ title: "Photo removed" });
+  }
+
+  async function handleExportReport() {
+    setExporting(true);
+    try {
+      generateFitnessReport({
+        userProfile,
+        username,
+        dailyLog,
+        workoutLogs,
+        stepEntries,
+        measurements,
+        stepGoal,
+      });
+      toast({ title: "Report downloaded!", description: "Your fitness report PDF has been saved." });
+    } catch (err) {
+      toast({ title: "Export failed", description: "Could not generate the report.", variant: "destructive" });
+    } finally {
+      setExporting(false);
+    }
   }
 
   async function handleChangePassword(e: React.FormEvent) {
@@ -382,6 +403,35 @@ export function Settings() {
               </Button>
             </div>
           </form>
+        </CardContent>
+      </Card>
+
+      {/* Export Report */}
+      <Card className="bg-card/50 backdrop-blur-sm border-border/50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileDown className="w-5 h-5 text-primary" /> Export Fitness Report
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between gap-6">
+            <div>
+              <p className="font-medium">Download PDF Report</p>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Generates a full report with your profile, today's nutrition, workouts, steps, and body measurements.
+              </p>
+            </div>
+            <Button
+              onClick={handleExportReport}
+              disabled={exporting}
+              className="shrink-0 min-w-[160px] bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-white"
+            >
+              {exporting
+                ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating…</>
+                : <><FileDown className="w-4 h-4 mr-2" /> Download PDF</>
+              }
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
